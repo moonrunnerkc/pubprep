@@ -51,9 +51,15 @@ describe("requireApiKey", () => {
     expect(() => requireApiKey()).toThrow(InvalidApiKeyError);
   });
 
-  it("returns the trimmed key when valid", () => {
-    process.env[VAR] = "  sk-ant-real-key-value  ";
-    expect(requireApiKey()).toBe("sk-ant-real-key-value");
+  it("throws InvalidApiKeyError when the key is too short to be real", () => {
+    process.env[VAR] = "sk-ant-x";
+    expect(() => requireApiKey()).toThrow(/placeholder/);
+  });
+
+  it("returns the trimmed key when long enough to be a real Anthropic key", () => {
+    const realLooking = "sk-ant-api03-" + "a".repeat(95);
+    process.env[VAR] = `  ${realLooking}  `;
+    expect(requireApiKey()).toBe(realLooking);
   });
 });
 

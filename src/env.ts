@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 const ANTHROPIC_API_KEY_PREFIX = "sk-ant-";
 const ANTHROPIC_API_KEY_VAR = "ANTHROPIC_API_KEY";
+const ANTHROPIC_API_KEY_MIN_LENGTH = 90;
 
 export const USER_CONFIG_DIR = ".pubprep";
 export const USER_ENV_FILE = ".env";
@@ -57,6 +58,11 @@ export function requireApiKey(): string {
   if (!value.startsWith(ANTHROPIC_API_KEY_PREFIX)) {
     throw new InvalidApiKeyError(
       `Get a real key from https://console.anthropic.com/ and replace the placeholder.`,
+    );
+  }
+  if (value.length < ANTHROPIC_API_KEY_MIN_LENGTH) {
+    throw new InvalidApiKeyError(
+      `The value present (${value.length} chars) looks like a placeholder, not a real key. Real Anthropic API keys are over 100 characters. Check ${userEnvPath()} and any project-level .env (project .env takes precedence).`,
     );
   }
   return value;
