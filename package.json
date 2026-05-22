@@ -1,0 +1,38 @@
+{
+  "name": "pubprep",
+  "version": "0.1.0",
+  "description": "Runs four bundled review agents (tech debt, docs, security, convergence) against a git repo via the Claude Agent SDK.",
+  "type": "module",
+  "bin": {
+    "pubprep": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "agents/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.3",
+    "vitest": "^1.4.0"
+  },
+  "license": "MIT",
+  "author": "Brad Kinnard"
+}

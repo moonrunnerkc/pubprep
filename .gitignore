@@ -1,0 +1,33 @@
+# Source-of-truth reference docs (canonical agents bundled into agents/)
+/build-guide.md
+/tech-debt-reviewer-agent.md
+/readme-docs-reviewer-agent.md
+/security-reviewer-agent.md
+/convergence-resolution-architect-agent.md
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Pubprep output (when run against itself)
+.pubprep/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Test artifacts
+coverage/
+.vitest/
