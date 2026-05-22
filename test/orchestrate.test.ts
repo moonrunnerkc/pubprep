@@ -92,8 +92,11 @@ describe("orchestrate", () => {
       expect(c.permissionMode).toBe("bypassPermissions");
       expect(c.settingSources).toEqual([]);
       expect(c.maxTurns).toBe(100);
-      expect(c.model).toBe("claude-opus-4-7");
     }
+    expect(mock.calls[0].model).toBe("claude-sonnet-4-6");
+    expect(mock.calls[1].model).toBe("claude-sonnet-4-6");
+    expect(mock.calls[2].model).toBe("claude-sonnet-4-6");
+    expect(mock.calls[3].model).toBe("claude-opus-4-7");
   });
 
   it("--dry-run skips convergence and exits success", async () => {

@@ -88,9 +88,13 @@ The agents themselves are markdown files in `agents/` that ship with the package
 
 ## Cost
 
-A full run hits the Anthropic API for four sessions — three reading the whole repo, one making edits with multi-turn tool use. Expect somewhere between a dollar and several dollars per run on a medium repo depending on size and how much work convergence does. Run `pubprep --dry-run` first to see what the reviewers find before paying for convergence.
+A full run is four agent sessions, not four LLM calls — each agent runs a multi-turn tool-use loop (Read / Grep / Glob / Bash) to inspect the repo, so reviewer sessions are typically 20–40 turns each and convergence is more. Per-run cost on a medium repo is usually $2–$6.
 
-The model is configured in one place (`src/models.ts`). To run reviewers on Sonnet 4.6 for cheaper audits while keeping convergence on Opus 4.7, branch on agent name in `modelForAgent()`.
+Default model split (`src/models.ts`):
+- Reviewers: Sonnet 4.6 — fast and cheap, strong analysis quality.
+- Convergence: Opus 4.7 — highest edit fidelity for the agent that actually writes commits.
+
+Run `pubprep --dry-run` first on a new repo to see what reviewers find before paying for a convergence pass. To shift convergence to Sonnet for further savings, edit `modelForAgent()`.
 
 ## Development
 
