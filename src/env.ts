@@ -1,9 +1,17 @@
 import { config as dotenvConfig } from "dotenv";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 const ANTHROPIC_API_KEY_PREFIX = "sk-ant-";
 const ANTHROPIC_API_KEY_VAR = "ANTHROPIC_API_KEY";
+
+export const USER_CONFIG_DIR = ".pubprep";
+export const USER_ENV_FILE = ".env";
+
+export function userEnvPath(home: string = homedir()): string {
+  return join(home, USER_CONFIG_DIR, USER_ENV_FILE);
+}
 
 export class MissingApiKeyError extends Error {
   readonly hint: string;
@@ -27,19 +35,22 @@ export class InvalidApiKeyError extends Error {
   }
 }
 
-export function loadEnv(cwd: string): void {
-  const envPath = join(cwd, ".env");
-  if (!existsSync(envPath)) {
-    return;
+export function loadEnv(cwd: string, home: string = homedir()): void {
+  const projectPath = join(cwd, ".env");
+  if (existsSync(projectPath)) {
+    dotenvConfig({ path: projectPath, override: false, quiet: true });
   }
-  dotenvConfig({ path: envPath, override: false, quiet: true });
+  const userPath = userEnvPath(home);
+  if (existsSync(userPath)) {
+    dotenvConfig({ path: userPath, override: false, quiet: true });
+  }
 }
 
 export function requireApiKey(): string {
   const raw = process.env[ANTHROPIC_API_KEY_VAR];
   if (raw === undefined || raw.trim() === "") {
     throw new MissingApiKeyError(
-      `Set it in a project-root .env file (ANTHROPIC_API_KEY=sk-ant-...) or export it in your shell.`,
+      `Set it once at ${userEnvPath()} (mkdir -p ~/.pubprep && echo 'ANTHROPIC_API_KEY=sk-ant-...' > ~/.pubprep/.env), or per-project in <project>/.env, or export it in your shell.`,
     );
   }
   const value = raw.trim();
@@ -50,3 +61,4 @@ export function requireApiKey(): string {
   }
   return value;
 }
+

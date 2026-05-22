@@ -7,7 +7,10 @@ import {
   MissingApiKeyError,
   loadEnv,
   requireApiKey,
+  userEnvPath,
 } from "../src/env.js";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
 const VAR = "ANTHROPIC_API_KEY";
 
@@ -71,14 +74,14 @@ describe("loadEnv", () => {
   it("loads ANTHROPIC_API_KEY from a project-root .env", () => {
     withTempDir((dir) => {
       writeFileSync(join(dir, ".env"), "ANTHROPIC_API_KEY=sk-ant-from-file\n");
-      loadEnv(dir);
+      loadEnv(dir, dir);
       expect(process.env[VAR]).toBe("sk-ant-from-file");
     });
   });
 
-  it("is a no-op when no .env file exists", () => {
+  it("is a no-op when neither .env nor ~/.pubprep/.env exists", () => {
     withTempDir((dir) => {
-      loadEnv(dir);
+      loadEnv(dir, dir);
       expect(process.env[VAR]).toBeUndefined();
     });
   });
@@ -87,8 +90,39 @@ describe("loadEnv", () => {
     process.env[VAR] = "sk-ant-from-shell";
     withTempDir((dir) => {
       writeFileSync(join(dir, ".env"), "ANTHROPIC_API_KEY=sk-ant-from-file\n");
-      loadEnv(dir);
+      loadEnv(dir, dir);
       expect(process.env[VAR]).toBe("sk-ant-from-shell");
     });
+  });
+
+  it("falls back to ~/.pubprep/.env when no project .env exists", () => {
+    withTempDir((projectDir) => {
+      withTempDir((homeDir) => {
+        const userEnv = userEnvPath(homeDir);
+        mkdirSync(dirname(userEnv), { recursive: true });
+        writeFileSync(userEnv, "ANTHROPIC_API_KEY=sk-ant-from-user-config\n");
+        loadEnv(projectDir, homeDir);
+        expect(process.env[VAR]).toBe("sk-ant-from-user-config");
+      });
+    });
+  });
+
+  it("project .env takes precedence over ~/.pubprep/.env", () => {
+    withTempDir((projectDir) => {
+      withTempDir((homeDir) => {
+        writeFileSync(join(projectDir, ".env"), "ANTHROPIC_API_KEY=sk-ant-project\n");
+        const userEnv = userEnvPath(homeDir);
+        mkdirSync(dirname(userEnv), { recursive: true });
+        writeFileSync(userEnv, "ANTHROPIC_API_KEY=sk-ant-user\n");
+        loadEnv(projectDir, homeDir);
+        expect(process.env[VAR]).toBe("sk-ant-project");
+      });
+    });
+  });
+});
+
+describe("userEnvPath", () => {
+  it("resolves to <home>/.pubprep/.env", () => {
+    expect(userEnvPath("/Users/someone")).toBe("/Users/someone/.pubprep/.env");
   });
 });

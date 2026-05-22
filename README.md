@@ -14,16 +14,19 @@ npm install -g pubprep
 
 Requires Node 18+. Linux and macOS only (Windows via WSL).
 
-Then, in any project where you want to run it:
+Set your key **once** in a user-level config file and pubprep finds it from any project:
 
 ```
-cd ~/projects/my-repo
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
-echo ".env" >> .gitignore
-echo ".pubprep/" >> .gitignore
+mkdir -p ~/.pubprep
+echo "ANTHROPIC_API_KEY=sk-ant-..." > ~/.pubprep/.env
+chmod 600 ~/.pubprep/.env
 ```
 
-Get a key at https://console.anthropic.com/. You can also export `ANTHROPIC_API_KEY` in your shell profile instead of using a per-project `.env`; pubprep treats them identically.
+Get a key at https://console.anthropic.com/. From then on, `pubprep` works in any git repo with no per-project setup.
+
+Precedence (highest first): `process.env.ANTHROPIC_API_KEY` (shell export) → project `.env` → `~/.pubprep/.env`. A per-project `.env` still works if you want a different key for one repo.
+
+Also gitignore `.pubprep/` in any project you run pubprep against — that's where it writes reports.
 
 ## Usage
 

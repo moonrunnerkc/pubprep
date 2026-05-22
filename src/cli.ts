@@ -63,9 +63,12 @@ Options:
   -h, --help       Show this message.
   -v, --version    Print the pubprep version.
 
-Setup:
-  Put ANTHROPIC_API_KEY=sk-ant-... in a .env at the project root (or export it).
-  Gitignore .env and .pubprep/ to avoid committing secrets or output.
+Setup (one-time):
+  echo 'ANTHROPIC_API_KEY=sk-ant-...' > ~/.pubprep/.env
+  mkdir -p ~/.pubprep  # if needed
+
+Per-project .env and shell export still work and take precedence in that
+order. Gitignore .env and .pubprep/ in any project before running.
 `;
 
 export async function main(argv: readonly string[]): Promise<number> {
