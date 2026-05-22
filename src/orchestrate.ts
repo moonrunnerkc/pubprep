@@ -7,7 +7,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { basename, relative } from "node:path";
+import { dirname, relative } from "node:path";
 import {
   CONVERGENCE_AGENT_NAME,
   REVIEWER_AGENT_NAMES,
@@ -214,12 +214,13 @@ function humanTitle(agentName: AgentName): string {
 
 function updateLatestSymlink(projectRoot: string, runDir: string): void {
   const linkPath = getLatestSymlink(projectRoot);
+  const target = relative(dirname(linkPath), runDir);
   try {
     rmSync(linkPath, { force: true });
   } catch {
     // ignore
   }
-  symlinkSync(basename(runDir), linkPath, "dir");
+  symlinkSync(target, linkPath, "dir");
 }
 
 function readHeadSha(projectRoot: string): string | null {
