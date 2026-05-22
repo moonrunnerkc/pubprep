@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { loadEnv, requireApiKey } from "./env.js";
 import { orchestrate } from "./orchestrate.js";
 import {
@@ -147,11 +149,19 @@ function printSummary(result: Awaited<ReturnType<typeof orchestrate>>): void {
   }
 }
 
-const invokedDirectly =
-  process.argv[1] !== undefined &&
-  import.meta.url === `file://${process.argv[1]}`;
+function isInvokedDirectly(): boolean {
+  const argv1 = process.argv[1];
+  if (argv1 === undefined) return false;
+  try {
+    const thisFile = realpathSync(fileURLToPath(import.meta.url));
+    const entry = realpathSync(argv1);
+    return thisFile === entry;
+  } catch {
+    return false;
+  }
+}
 
-if (invokedDirectly) {
+if (isInvokedDirectly()) {
   main(process.argv.slice(2))
     .then((code) => {
       process.exit(code);
