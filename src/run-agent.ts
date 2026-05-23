@@ -8,8 +8,20 @@ import {
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { findClaudeCodeBinary } from "./claude-code.js";
-import { type AgentName, getAgentDefinitionPath } from "./paths.js";
+import {
+  CONVERGENCE_AGENT_NAME,
+  type AgentName,
+  getAgentDefinitionPath,
+} from "./paths.js";
 import { maxTurnsForAgent, modelForAgent } from "./models.js";
+
+/**
+ * Tools the three reviewer agents are allowed to call. Reviewers inspect the
+ * repo only; they should never edit, write, or run shell commands that mutate
+ * state. The system prompt asks for this; this allowlist enforces it at the
+ * SDK boundary as a second layer.
+ */
+const REVIEWER_ALLOWED_TOOLS: readonly string[] = ["Read", "Grep", "Glob", "Bash"];
 
 export type QueryFn = (params: {
   prompt: string | AsyncIterable<SDKUserMessage>;
@@ -87,6 +99,9 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
       allowDangerouslySkipPermissions: true,
       maxTurns,
     };
+    if (agentName !== CONVERGENCE_AGENT_NAME) {
+      options.allowedTools = [...REVIEWER_ALLOWED_TOOLS];
+    }
     if (pathToClaudeCodeExecutable) {
       options.pathToClaudeCodeExecutable = pathToClaudeCodeExecutable;
     }

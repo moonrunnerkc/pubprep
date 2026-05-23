@@ -102,6 +102,20 @@ describe("orchestrate", () => {
     expect(mock.calls[3].maxTurns).toBe(300);
   });
 
+  it("restricts reviewer agents to read-only tools and grants convergence the full toolset", async () => {
+    const mock = createMockSdk({}, { textChunks: ["x\n"] });
+    await orchestrate({
+      projectRoot: repo,
+      now: new Date(Date.UTC(2026, 4, 22, 15, 30, 0)),
+      query: mock.query,
+    });
+    expect(mock.calls).toHaveLength(4);
+    for (const reviewerCall of mock.calls.slice(0, 3)) {
+      expect(reviewerCall.allowedTools).toEqual(["Read", "Grep", "Glob", "Bash"]);
+    }
+    expect(mock.calls[3].allowedTools).toBeUndefined();
+  });
+
   it("--dry-run skips convergence and exits success", async () => {
     const mock = createMockSdk({}, { textChunks: ["x\n"] });
     const result = await orchestrate({

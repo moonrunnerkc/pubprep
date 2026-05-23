@@ -28,6 +28,7 @@ export interface MockSdkCall {
   settingSources: unknown;
   maxTurns: number | undefined;
   prompt: string | undefined;
+  allowedTools: readonly string[] | undefined;
 }
 
 export interface MockSdk {
@@ -54,6 +55,7 @@ export function createMockSdk(behaviors: MockMap, fallback?: MockBehavior): Mock
       settingSources: opts.settingSources,
       maxTurns: opts.maxTurns,
       prompt: promptStr,
+      allowedTools: opts.allowedTools,
     });
 
     const behavior = pickBehavior(preview, behaviors, fallback);
