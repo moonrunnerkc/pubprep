@@ -22,7 +22,10 @@ export type CliArgs = {
   allowDirty: boolean;
   help: boolean;
   version: boolean;
+  maxBudgetUsd: number | null;
 };
+
+const DEFAULT_MAX_BUDGET_USD = 20;
 
 export const VERSION: string = readPackageVersion();
 
@@ -47,8 +50,10 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     allowDirty: false,
     help: false,
     version: false,
+    maxBudgetUsd: DEFAULT_MAX_BUDGET_USD,
   };
-  for (const a of argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
     switch (a) {
       case "--dry-run":
         args.dryRun = true;
@@ -64,6 +69,24 @@ export function parseArgs(argv: readonly string[]): CliArgs {
       case "--version":
         args.version = true;
         break;
+      case "--no-max-budget-usd":
+        args.maxBudgetUsd = null;
+        break;
+      case "--max-budget-usd": {
+        const raw = argv[i + 1];
+        if (raw === undefined) {
+          throw new Error("--max-budget-usd requires a numeric value (USD).");
+        }
+        const n = Number(raw);
+        if (!Number.isFinite(n) || n < 0) {
+          throw new Error(
+            `--max-budget-usd requires a non-negative number, got: ${raw}`,
+          );
+        }
+        args.maxBudgetUsd = n;
+        i++;
+        break;
+      }
       default:
         throw new Error(`Unknown flag: ${a}. Run pubprep --help for usage.`);
     }
@@ -79,10 +102,15 @@ directory. Three reviewers run in parallel and write reports under
 executes fixes against the working tree on its own branch.
 
 Options:
-  --dry-run        Run the three reviewers only; skip convergence.
-  --allow-dirty    Proceed even if the working tree has uncommitted changes.
-  -h, --help       Show this message.
-  -v, --version    Print the pubprep version.
+  --dry-run                Run the three reviewers only; skip convergence.
+  --allow-dirty            Proceed even if the working tree has uncommitted changes.
+  --max-budget-usd <n>     Hard cap on cumulative API spend across the run, in
+                           USD. Defaults to ${DEFAULT_MAX_BUDGET_USD}. Has no
+                           effect under subscription auth (cost is reported as
+                           zero per call).
+  --no-max-budget-usd      Disable the budget cap.
+  -h, --help               Show this message.
+  -v, --version            Print the pubprep version.
 
 Auth:
   Uses your locally-installed Claude Code (~/.local/bin/claude or
@@ -175,6 +203,7 @@ export async function main(
       warnings,
       log: (m) => process.stdout.write(`${m}\n`),
       parallelReviewers: !usingSubscription,
+      maxBudgetUsd: parsed.maxBudgetUsd,
     });
     printSummary(result, usingSubscription);
     return result.exitReason === "success" ? 0 : 2;

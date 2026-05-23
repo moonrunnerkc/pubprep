@@ -2,14 +2,39 @@ import { describe, expect, it } from "vitest";
 import { parseArgs, USAGE, VERSION } from "../src/cli.js";
 
 describe("parseArgs", () => {
-  it("defaults to a non-dry, non-allow-dirty run", () => {
+  it("defaults to a non-dry, non-allow-dirty run with the default budget cap", () => {
     const a = parseArgs([]);
     expect(a).toEqual({
       dryRun: false,
       allowDirty: false,
       help: false,
       version: false,
+      maxBudgetUsd: 20,
     });
+  });
+
+  it("parses --max-budget-usd <n>", () => {
+    expect(parseArgs(["--max-budget-usd", "5"]).maxBudgetUsd).toBe(5);
+    expect(parseArgs(["--max-budget-usd", "0"]).maxBudgetUsd).toBe(0);
+  });
+
+  it("parses --no-max-budget-usd as null", () => {
+    expect(parseArgs(["--no-max-budget-usd"]).maxBudgetUsd).toBeNull();
+  });
+
+  it("rejects --max-budget-usd without a value", () => {
+    expect(() => parseArgs(["--max-budget-usd"])).toThrow(
+      /--max-budget-usd requires a numeric value/,
+    );
+  });
+
+  it("rejects non-numeric or negative --max-budget-usd values", () => {
+    expect(() => parseArgs(["--max-budget-usd", "abc"])).toThrow(
+      /non-negative number/,
+    );
+    expect(() => parseArgs(["--max-budget-usd", "-1"])).toThrow(
+      /non-negative number/,
+    );
   });
 
   it("parses --dry-run", () => {

@@ -23,7 +23,12 @@ export type Manifest = {
   target_head_sha: string | null;
   agents: AgentManifestEntry[];
   convergence_branch: string | null;
-  exit_reason: "success" | "reviewer_failure" | "convergence_failure" | "in_progress";
+  exit_reason:
+    | "success"
+    | "reviewer_failure"
+    | "convergence_failure"
+    | "budget_exceeded"
+    | "in_progress";
   warnings: string[];
 };
 

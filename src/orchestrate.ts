@@ -27,7 +27,11 @@ import {
   type Manifest,
 } from "./manifest.js";
 
-export type ExitReason = "success" | "reviewer_failure" | "convergence_failure";
+export type ExitReason =
+  | "success"
+  | "reviewer_failure"
+  | "convergence_failure"
+  | "budget_exceeded";
 
 export interface OrchestrateParams {
   projectRoot: string;
@@ -37,6 +41,15 @@ export interface OrchestrateParams {
   warnings?: string[];
   log?: (message: string) => void;
   parallelReviewers?: boolean;
+  /**
+   * Hard cap on cumulative API spend across the whole run, in USD. After
+   * each agent completes, if the sum of totalCostUsd values exceeds this
+   * cap, the remaining phases are skipped and the run exits with
+   * exit_reason: "budget_exceeded". A null value disables the cap.
+   * In subscription mode the SDK reports zero cost per call, so the cap
+   * never trips.
+   */
+  maxBudgetUsd?: number | null;
 }
 
 export interface OrchestrateResult {
@@ -73,6 +86,7 @@ export async function orchestrate(
     warnings = [],
     log = noop,
     parallelReviewers = true,
+    maxBudgetUsd = null,
   } = params;
 
   const runId = formatRunTimestamp(now);
@@ -110,6 +124,21 @@ export async function orchestrate(
     writeManifest(manifestPath, manifest);
     updateLatestSymlink(projectRoot, runDir);
     return { runDir, manifestPath, exitReason: "reviewer_failure", manifest };
+  }
+
+  const reviewerCostUsd = sumCost(reviewerResults);
+  if (overBudget(reviewerCostUsd, maxBudgetUsd)) {
+    log(
+      `reviewer phase spent $${reviewerCostUsd.toFixed(4)} which exceeds the --max-budget-usd cap of $${(maxBudgetUsd ?? 0).toFixed(2)}; skipping convergence`,
+    );
+    manifest.exit_reason = "budget_exceeded";
+    manifest.warnings.push(
+      `budget cap of $${(maxBudgetUsd ?? 0).toFixed(2)} exceeded after reviewer phase ($${reviewerCostUsd.toFixed(4)})`,
+    );
+    manifest.finished_at = new Date().toISOString();
+    writeManifest(manifestPath, manifest);
+    updateLatestSymlink(projectRoot, runDir);
+    return { runDir, manifestPath, exitReason: "budget_exceeded", manifest };
   }
 
   log("phase 2: concatenating reviewer outputs into combined-review.md");
@@ -280,4 +309,13 @@ function readCurrentBranch(projectRoot: string): string | null {
 
 function noop(_: string): void {
   // default log sink
+}
+
+function sumCost(results: readonly RunAgentResult[]): number {
+  return results.reduce((acc, r) => acc + r.totalCostUsd, 0);
+}
+
+function overBudget(cumulativeUsd: number, capUsd: number | null): boolean {
+  if (capUsd === null) return false;
+  return cumulativeUsd > capUsd;
 }
