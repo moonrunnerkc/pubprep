@@ -1,7 +1,6 @@
 <p align="center">
   <img src="./assets/cover.svg" alt="pubprep cover" width="100%">
 </p>
-# pubprep
 
 `pubprep` addresses multiple common issues with ai generated code that typical agents do not address:
 - Tech Debt reviewer has customized instructions to keep pages under 300 lines at max, explain things simply and easy to understand. Remove redundant / dead / unused code and more.
