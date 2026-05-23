@@ -1,21 +1,13 @@
 <p align="center">
   <img src="./assets/cover.svg" alt="pubprep cover" width="100%">
 </p>
-
 # pubprep
 
-`pubprep` runs three AI reviewer agents (tech debt, docs, security) against the git repo in your current directory, then a convergence agent that reads their combined output and applies fixes on a new branch. After a clean publish-readiness gate (clean tree + typecheck + tests), pubprep pushes the branch to `origin` and opens a GitHub pull request via `gh`. One command from "almost ready" to "click merge."
-
-This tool addresses multiple common issues with ai generated code that typical agents do not address:
+`pubprep` addresses multiple common issues with ai generated code that typical agents do not address:
 - Tech Debt reviewer has customized instructions to keep pages under 300 lines at max, explain things simply and easy to understand. Remove redundant / dead / unused code and more.
 - Docs reviewer improves current documentation (or creates new) for a more modern feel and overall easy to understand content. includes table of contents, svg cover photo and more.
 - Security reviewer evaluates entire codebase for security related issues that are commonly missed / not included by coding agents.
 - All findings are sent to a convergance agent that implements root cause fixes in full for all issues found. commits all work, opens a pr with it.
-
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
-[![Node: ≥18](https://img.shields.io/badge/node-%E2%89%A518-brightgreen?style=flat-square)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?style=flat-square)](./tsconfig.json)
-[![Version](https://img.shields.io/badge/version-0.1.0-orange?style=flat-square)](./package.json)
 
 ## Table of Contents
 
