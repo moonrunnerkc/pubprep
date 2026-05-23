@@ -208,4 +208,54 @@ describe("orchestrate", () => {
     const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
     expect(manifest.exit_reason).toBe("convergence_failure");
   });
+
+  it("returns not_publish_ready when convergence leaves the tree dirty", async () => {
+    const dirtyMock = createMockSdk(
+      {
+        "convergence-resolution-architect": {
+          textChunks: ["CONV\n"],
+          onCall: () => {
+            writeFileSync(join(repo, "leftover.txt"), "convergence forgot to commit\n");
+          },
+        },
+      },
+      { textChunks: ["ok\n"] },
+    );
+    const result = await orchestrate({
+      projectRoot: repo,
+      now: new Date(Date.UTC(2026, 4, 22, 20, 0, 0)),
+      query: dirtyMock.query,
+    });
+    expect(result.exitReason).toBe("not_publish_ready");
+    const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
+    expect(manifest.exit_reason).toBe("not_publish_ready");
+    expect(manifest.publish_gate.passed).toBe(false);
+    const checks = manifest.publish_gate.failures.map(
+      (f: { check: string }) => f.check,
+    );
+    expect(checks).toContain("clean_tree");
+  });
+
+  it("publishGate=false short-circuits the gate and keeps success when tree is dirty", async () => {
+    const dirtyMock = createMockSdk(
+      {
+        "convergence-resolution-architect": {
+          textChunks: ["CONV\n"],
+          onCall: () => {
+            writeFileSync(join(repo, "leftover.txt"), "ok\n");
+          },
+        },
+      },
+      { textChunks: ["ok\n"] },
+    );
+    const result = await orchestrate({
+      projectRoot: repo,
+      now: new Date(Date.UTC(2026, 4, 22, 21, 0, 0)),
+      query: dirtyMock.query,
+      publishGate: false,
+    });
+    expect(result.exitReason).toBe("success");
+    const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
+    expect(manifest.publish_gate.ran).toBe(false);
+  });
 });

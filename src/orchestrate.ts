@@ -26,12 +26,18 @@ import {
   writeManifest,
   type Manifest,
 } from "./manifest.js";
+import {
+  skippedPublishGate,
+  verifyPublishReadiness,
+  type PublishGateResult,
+} from "./publish-gate.js";
 
 export type ExitReason =
   | "success"
   | "reviewer_failure"
   | "convergence_failure"
-  | "budget_exceeded";
+  | "budget_exceeded"
+  | "not_publish_ready";
 
 export interface OrchestrateParams {
   projectRoot: string;
@@ -50,6 +56,15 @@ export interface OrchestrateParams {
    * never trips.
    */
   maxBudgetUsd?: number | null;
+  /**
+   * After convergence reports success, run a post-flight check that the
+   * working tree is clean and any project-defined typecheck/test scripts
+   * pass. If any check fails, the run exits with "not_publish_ready" and
+   * the detail is recorded in manifest.publish_gate. Defaults to true.
+   * Set to false for projects that don't have these scripts or for runs
+   * where the convergence agent intentionally leaves the tree dirty.
+   */
+  publishGate?: boolean;
 }
 
 export interface OrchestrateResult {
@@ -87,6 +102,7 @@ export async function orchestrate(
     log = noop,
     parallelReviewers = true,
     maxBudgetUsd = null,
+    publishGate = true,
   } = params;
 
   const runId = formatRunTimestamp(now);
@@ -166,9 +182,31 @@ export async function orchestrate(
   recordAgentResult(manifest, convergenceResult);
   manifest.convergence_branch = readCurrentBranch(projectRoot);
 
-  const exitReason: ExitReason = convergenceResult.isError
-    ? "convergence_failure"
-    : "success";
+  if (convergenceResult.isError) {
+    manifest.exit_reason = "convergence_failure";
+    manifest.finished_at = new Date().toISOString();
+    writeManifest(manifestPath, manifest);
+    updateLatestSymlink(projectRoot, runDir);
+    return {
+      runDir,
+      manifestPath,
+      exitReason: "convergence_failure",
+      manifest,
+    };
+  }
+
+  log("phase 4: publish-readiness gate");
+  const gate: PublishGateResult = publishGate
+    ? verifyPublishReadiness({ projectRoot, log })
+    : skippedPublishGate();
+  manifest.publish_gate = gate;
+  if (!gate.passed) {
+    for (const f of gate.failures) {
+      manifest.warnings.push(`publish gate (${f.check}) failed`);
+    }
+  }
+
+  const exitReason: ExitReason = gate.passed ? "success" : "not_publish_ready";
   manifest.exit_reason = exitReason;
   manifest.finished_at = new Date().toISOString();
   writeManifest(manifestPath, manifest);

@@ -15,6 +15,7 @@ export interface MockBehavior {
   numTurns?: number;
   durationMs?: number;
   totalCostUsd?: number;
+  onCall?: () => void;
 }
 
 export type MockMap = Partial<Record<AgentName, MockBehavior>>;
@@ -89,6 +90,7 @@ function makeQuery(behavior: MockBehavior): Query {
   }
 
   const gen = (async function* (): AsyncGenerator<SDKMessage, void> {
+    behavior.onCall?.();
     const sessionId = "mock-session";
     for (const chunk of behavior.textChunks ?? ["mock output\n"]) {
       const m: SDKAssistantMessage = {

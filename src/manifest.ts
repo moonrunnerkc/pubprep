@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { AgentName } from "./paths.js";
+import type { PublishGateResult } from "./publish-gate.js";
 import type { RunAgentResult, RunStopReason } from "./run-agent.js";
 
 export type AgentManifestEntry = {
@@ -28,7 +29,9 @@ export type Manifest = {
     | "reviewer_failure"
     | "convergence_failure"
     | "budget_exceeded"
+    | "not_publish_ready"
     | "in_progress";
+  publish_gate: PublishGateResult | null;
   warnings: string[];
 };
 
@@ -47,6 +50,7 @@ export function createInitialManifest(args: {
     agents: [],
     convergence_branch: null,
     exit_reason: "in_progress",
+    publish_gate: null,
     warnings: [],
   };
 }
