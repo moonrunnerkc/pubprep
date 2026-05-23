@@ -1,0 +1,42 @@
+<svg viewBox="0 0 1280 320" xmlns="http://www.w3.org/2000/svg" width="1280" height="320">
+  <!-- Background -->
+  <rect width="1280" height="320" fill="#0f172a"/>
+
+  <!-- Branch merge visualization: three reviewer nodes converging to one -->
+  <!-- Reviewer nodes -->
+  <circle cx="72" cy="100" r="7" fill="#334155"/>
+  <circle cx="72" cy="160" r="7" fill="#334155"/>
+  <circle cx="72" cy="220" r="7" fill="#334155"/>
+
+  <!-- Lines from reviewer nodes to convergence node -->
+  <line x1="79" y1="100" x2="218" y2="158" stroke="#1e3a5f" stroke-width="2"/>
+  <line x1="79" y1="160" x2="218" y2="160" stroke="#1e3a5f" stroke-width="2"/>
+  <line x1="79" y1="220" x2="218" y2="162" stroke="#1e3a5f" stroke-width="2"/>
+
+  <!-- Convergence node -->
+  <circle cx="226" cy="160" r="12" fill="#f97316"/>
+
+  <!-- Output line from convergence -->
+  <line x1="238" y1="160" x2="290" y2="160" stroke="#f97316" stroke-width="2"/>
+  <circle cx="296" cy="160" r="6" fill="#f97316" opacity="0.55"/>
+
+  <!-- Project name -->
+  <text
+    x="334"
+    y="200"
+    font-family="'Inter', 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+    font-weight="700"
+    font-size="92"
+    fill="#f97316"
+    letter-spacing="-3">pubprep</text>
+
+  <!-- Tagline -->
+  <text
+    x="337"
+    y="244"
+    font-family="'Inter', 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+    font-weight="400"
+    font-size="22"
+    fill="#64748b"
+    letter-spacing="0.2">Three reviewers. One convergence. A branch ready to merge.</text>
+</svg>
