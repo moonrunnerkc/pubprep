@@ -136,6 +136,36 @@ describe("orchestrate", () => {
     expect(sec.errorMessage).toContain("rate limited");
   });
 
+  it("runs reviewers sequentially when parallelReviewers is false", async () => {
+    const order: string[] = [];
+    const mock = createMockSdk(
+      {
+        "Tech Debt Reviewer": { textChunks: ["TD\n"] },
+        "README and Documentation Reviewer": { textChunks: ["DOCS\n"] },
+        "Security Reviewer": { textChunks: ["SEC\n"] },
+        "CONVERGENCE": { textChunks: ["CONV\n"] },
+      },
+    );
+    const wrappedQuery: typeof mock.query = (params) => {
+      const sysPrompt = typeof params.options?.systemPrompt === "string" ? params.options.systemPrompt : "";
+      const firstLine = sysPrompt.split("\n", 1)[0] ?? "";
+      order.push(firstLine);
+      return mock.query(params);
+    };
+    const result = await orchestrate({
+      projectRoot: repo,
+      now: new Date(Date.UTC(2026, 4, 22, 19, 0, 0)),
+      query: wrappedQuery,
+      parallelReviewers: false,
+    });
+    expect(result.exitReason).toBe("success");
+    expect(order).toHaveLength(4);
+    expect(order[0]).toContain("Tech Debt Reviewer");
+    expect(order[1]).toContain("README and Documentation Reviewer");
+    expect(order[2]).toContain("Security Reviewer");
+    expect(order[3]).toContain("CONVERGENCE");
+  });
+
   it("returns convergence_failure when convergence errors out", async () => {
     const mock = createMockSdk(
       { CONVERGENCE: { shouldThrow: new Error("convergence boom") } },

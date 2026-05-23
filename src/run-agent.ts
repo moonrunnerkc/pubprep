@@ -7,6 +7,7 @@ import {
   type SDKMessage,
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
+import { findClaudeCodeBinary } from "./claude-code.js";
 import { type AgentName, getAgentDefinitionPath } from "./paths.js";
 import { DEFAULT_MAX_TURNS, modelForAgent } from "./models.js";
 
@@ -23,6 +24,7 @@ export interface RunAgentParams {
   streamToStdout?: boolean;
   maxTurns?: number;
   query?: QueryFn;
+  pathToClaudeCodeExecutable?: string | null;
 }
 
 export type RunStopReason =
@@ -55,6 +57,7 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
     streamToStdout = false,
     maxTurns = DEFAULT_MAX_TURNS,
     query = realQuery,
+    pathToClaudeCodeExecutable = findClaudeCodeBinary(),
   } = params;
 
   const systemPrompt = readFileSync(getAgentDefinitionPath(agentName), "utf8");
@@ -75,18 +78,19 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
   };
 
   try {
-    const q = query({
-      prompt,
-      options: {
-        systemPrompt,
-        model,
-        cwd,
-        settingSources: [],
-        permissionMode: "bypassPermissions",
-        allowDangerouslySkipPermissions: true,
-        maxTurns,
-      },
-    });
+    const options: Options = {
+      systemPrompt,
+      model,
+      cwd,
+      settingSources: [],
+      permissionMode: "bypassPermissions",
+      allowDangerouslySkipPermissions: true,
+      maxTurns,
+    };
+    if (pathToClaudeCodeExecutable) {
+      options.pathToClaudeCodeExecutable = pathToClaudeCodeExecutable;
+    }
+    const q = query({ prompt, options });
 
     for await (const message of q) {
       handleMessage(message, outputPath, streamToStdout, result);

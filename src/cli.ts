@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { loadEnv, requireApiKey } from "./env.js";
+import { findClaudeCodeBinary } from "./claude-code.js";
+import { loadEnv } from "./env.js";
 import { orchestrate } from "./orchestrate.js";
 import {
   checkEnvFilePresentAndIgnored,
@@ -63,12 +64,12 @@ Options:
   -h, --help       Show this message.
   -v, --version    Print the pubprep version.
 
-Setup (one-time):
-  echo 'ANTHROPIC_API_KEY=sk-ant-...' > ~/.pubprep/.env
-  mkdir -p ~/.pubprep  # if needed
-
-Per-project .env and shell export still work and take precedence in that
-order. Gitignore .env and .pubprep/ in any project before running.
+Auth:
+  Uses your locally-installed Claude Code (~/.local/bin/claude or
+  /opt/homebrew/bin/claude) for subscription-based auth — no API key
+  needed if you're already logged into Claude Code. To force per-token
+  API billing instead, export ANTHROPIC_API_KEY and ensure 'claude'
+  is not on your PATH.
 `;
 
 export async function main(argv: readonly string[]): Promise<number> {
@@ -92,11 +93,20 @@ export async function main(argv: readonly string[]): Promise<number> {
   const projectRoot = process.cwd();
   loadEnv(projectRoot);
 
-  try {
-    requireApiKey();
-  } catch (err) {
-    process.stderr.write(`${(err as Error).message}\n`);
+  const claudeBinary = findClaudeCodeBinary();
+  const hasApiKey = (process.env.ANTHROPIC_API_KEY ?? "").trim().length > 0;
+  if (claudeBinary === null && !hasApiKey) {
+    process.stderr.write(
+      "error: no auth available. Install Claude Code (https://claude.ai/code) and log in, or export ANTHROPIC_API_KEY.\n",
+    );
     return 1;
+  }
+  const usingSubscription = claudeBinary !== null;
+  if (usingSubscription) {
+    process.stdout.write(`auth: Claude Code subscription via ${claudeBinary}\n`);
+    delete process.env.ANTHROPIC_API_KEY;
+  } else {
+    process.stdout.write("auth: ANTHROPIC_API_KEY (per-token billing)\n");
   }
 
   const prereqChecks: Prereq[] = [
@@ -123,8 +133,9 @@ export async function main(argv: readonly string[]): Promise<number> {
       dryRun: parsed.dryRun,
       warnings,
       log: (m) => process.stdout.write(`${m}\n`),
+      parallelReviewers: !usingSubscription,
     });
-    printSummary(result);
+    printSummary(result, usingSubscription);
     return result.exitReason === "success" ? 0 : 2;
   } catch (err) {
     process.stderr.write(`error: ${(err as Error).message}\n`);
@@ -132,17 +143,20 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
 }
 
-function printSummary(result: Awaited<ReturnType<typeof orchestrate>>): void {
+function printSummary(
+  result: Awaited<ReturnType<typeof orchestrate>>,
+  usingSubscription: boolean,
+): void {
   process.stdout.write("\n--- run summary ---\n");
   process.stdout.write(`run dir: ${result.runDir}\n`);
   process.stdout.write(`manifest: ${result.manifestPath}\n`);
   process.stdout.write(`exit: ${result.exitReason}\n`);
   for (const a of result.manifest.agents) {
-    const cost = a.totalCostUsd.toFixed(4);
     const seconds = (a.durationMs / 1000).toFixed(1);
     const err = a.errorMessage ? ` :: ${a.errorMessage}` : "";
+    const cost = usingSubscription ? "subscription" : `$${a.totalCostUsd.toFixed(4)}`;
     process.stdout.write(
-      `  ${a.agentName}  stop=${a.stopReason}  turns=${a.turnsUsed}  ${seconds}s  $${cost}${err}\n`,
+      `  ${a.agentName}  stop=${a.stopReason}  turns=${a.turnsUsed}  ${seconds}s  ${cost}${err}\n`,
     );
   }
   if (result.manifest.convergence_branch) {

@@ -14,7 +14,13 @@ npm install -g pubprep
 
 Requires Node 18+. Linux and macOS only (Windows via WSL).
 
-Set your key **once** in a user-level config file and pubprep finds it from any project:
+**Auth: defaults to your Claude Code subscription** if `claude` is on your PATH (logged in via `claude /login`). Per-run cost is then part of your monthly subscription — no per-token billing.
+
+```
+which claude   # /Users/you/.local/bin/claude → subscription mode
+```
+
+If `claude` isn't installed, pubprep falls back to a per-token API key. Set one (once):
 
 ```
 mkdir -p ~/.pubprep
@@ -22,11 +28,7 @@ echo "ANTHROPIC_API_KEY=sk-ant-..." > ~/.pubprep/.env
 chmod 600 ~/.pubprep/.env
 ```
 
-Get a key at https://console.anthropic.com/. From then on, `pubprep` works in any git repo with no per-project setup.
-
-Precedence (highest first): `process.env.ANTHROPIC_API_KEY` (shell export) → project `.env` → `~/.pubprep/.env`. A per-project `.env` still works if you want a different key for one repo.
-
-Also gitignore `.pubprep/` in any project you run pubprep against — that's where it writes reports.
+Precedence for API key (highest first): shell export → project `.env` → `~/.pubprep/.env`. Gitignore `.pubprep/` in any project you run pubprep against — that's where reports land.
 
 ## Usage
 
@@ -88,13 +90,11 @@ The agents themselves are markdown files in `agents/` that ship with the package
 
 ## Cost
 
-A full run is four agent sessions, not four LLM calls — each agent runs a multi-turn tool-use loop (Read / Grep / Glob / Bash) to inspect the repo, so reviewer sessions are typically 20–40 turns each and convergence is more. Per-run cost on a medium repo is usually $2–$6.
+In **subscription mode** (Claude Code logged in): no per-run charge. Token usage counts against your subscription's session/5-hour limits like any other Claude Code work. Reviewers run sequentially in this mode because the locally-installed Claude Code binary doesn't tolerate three concurrent instances; expect ~10–15 min for the reviewer phase, plus convergence.
 
-Default model split (`src/models.ts`):
-- Reviewers: Sonnet 4.6 — fast and cheap, strong analysis quality.
-- Convergence: Opus 4.7 — highest edit fidelity for the agent that actually writes commits.
+In **API-key mode** (no `claude` on PATH, ANTHROPIC_API_KEY set): per-token billing. Reviewers run in parallel. Default model split (`src/models.ts`): reviewers on Sonnet 4.6, convergence on Opus 4.7. Typical per-run cost on a medium repo: $2–$6.
 
-Run `pubprep --dry-run` first on a new repo to see what reviewers find before paying for a convergence pass. To shift convergence to Sonnet for further savings, edit `modelForAgent()`.
+Either way, each agent is multi-turn — Read/Grep/Glob/Bash to inspect the repo — so reviewer sessions are typically 20–40 turns each and convergence is more. Run `pubprep --dry-run` first on a new repo to skip the convergence pass.
 
 ## Development
 

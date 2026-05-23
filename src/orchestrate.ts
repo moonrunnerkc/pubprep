@@ -36,6 +36,7 @@ export interface OrchestrateParams {
   query?: QueryFn;
   warnings?: string[];
   log?: (message: string) => void;
+  parallelReviewers?: boolean;
 }
 
 export interface OrchestrateResult {
@@ -69,6 +70,7 @@ export async function orchestrate(
     query,
     warnings = [],
     log = noop,
+    parallelReviewers = true,
   } = params;
 
   const runId = formatRunTimestamp(now);
@@ -89,12 +91,10 @@ export async function orchestrate(
   log(`run dir: ${runDir}`);
   log(`dry run: ${dryRun ? "yes (reviewers only)" : "no"}`);
 
-  log("phase 1: running three reviewers in parallel");
-  const reviewerResults = await runReviewersInParallel({
-    projectRoot,
-    runDir,
-    query,
-  });
+  log(`phase 1: running three reviewers ${parallelReviewers ? "in parallel" : "sequentially"}`);
+  const reviewerResults = parallelReviewers
+    ? await runReviewersInParallel({ projectRoot, runDir, query })
+    : await runReviewersSequentially({ projectRoot, runDir, query });
   for (const r of reviewerResults) {
     recordAgentResult(manifest, r);
   }
@@ -182,6 +182,26 @@ async function runReviewersInParallel(args: {
       errorMessage: reason,
     };
   });
+}
+
+async function runReviewersSequentially(args: {
+  projectRoot: string;
+  runDir: string;
+  query?: QueryFn;
+}): Promise<RunAgentResult[]> {
+  const results: RunAgentResult[] = [];
+  for (const agentName of REVIEWER_AGENT_NAMES) {
+    const result = await runAgent({
+      agentName,
+      prompt: REVIEWER_PROMPT,
+      cwd: args.projectRoot,
+      outputPath: getOutputPath(args.runDir, agentName),
+      streamToStdout: false,
+      query: args.query,
+    });
+    results.push(result);
+  }
+  return results;
 }
 
 function writeCombinedReview(
