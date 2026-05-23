@@ -92,7 +92,15 @@ Auth:
   is not on your PATH.
 `;
 
-export async function main(argv: readonly string[]): Promise<number> {
+export interface MainOptions {
+  cwd?: string;
+  home?: string;
+}
+
+export async function main(
+  argv: readonly string[],
+  options: MainOptions = {},
+): Promise<number> {
   let parsed: CliArgs;
   try {
     parsed = parseArgs(argv);
@@ -110,8 +118,12 @@ export async function main(argv: readonly string[]): Promise<number> {
     return 0;
   }
 
-  const projectRoot = process.cwd();
-  loadEnv(projectRoot);
+  const projectRoot = options.cwd ?? process.cwd();
+  if (options.home !== undefined) {
+    loadEnv(projectRoot, options.home);
+  } else {
+    loadEnv(projectRoot);
+  }
 
   const claudeBinary = findClaudeCodeBinary();
   const usingSubscription = claudeBinary !== null;
