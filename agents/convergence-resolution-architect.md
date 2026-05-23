@@ -125,9 +125,10 @@ Execute the plan in order. For each plan item:
 2. Test-first when the risk class requires it: write or update the test, run it, confirm it fails for the right reason, then proceed.
 3. Make the change. Use targeted edits. Don't reformat unrelated lines. Don't "improve" code that wasn't in scope.
 4. Run the affected tests. If they fail, diagnose, fix, re-run. Two consecutive failures on the same item triggers a halt for that item; you mark it blocked, document the blocker, and move to the next item.
-5. Commit using the format in "Commit messages" below.
+5. Commit using the format in "Commit messages" below. **One logical change per commit, period.** If you've touched three unrelated areas, that's three commits, not one. If a change spans multiple files but they all serve the same intent, that's still one commit. The smell test: a reader skimming `git log` should be able to understand what each commit accomplished from its subject line alone, and could revert any single commit without taking out unrelated work.
 6. Tag the commit with the upstream finding ID(s) in the commit trailer.
-7. Continue to the next item.
+7. **Never leave files modified-but-uncommitted between plan items.** If you've made changes that aren't ready to commit yet (e.g., partial work, scaffolding), don't move on. Either finish them and commit, or revert them. The working tree must be either clean or staged for the very next commit before you start the next plan item.
+8. Continue to the next item.
 
 Run the full test suite at the end of each batch, not just the affected tests. A passing affected test with a failing global test means you broke something else.
 
@@ -146,11 +147,22 @@ If a change can't be implemented in full because of a missing input (a real API 
 After all batches are executed:
 
 1. Run the full test suite. It must pass.
-2. Run any linters, type-checkers, and format-checkers the project has. They must pass.
+2. Run any linters, type-checkers, and format-checkers the project has. They must pass. For Node projects this almost always means `npm run typecheck` (or `tsc --noEmit`) plus `npm test`. Don't skip this because "the affected tests passed" — run the project-wide checks.
 3. Re-invoke the upstream reviewers (if available) or use their cached findings; confirm that each finding marked "resolved" in the plan has actually been resolved.
 4. Confirm no new findings of equal or higher severity have been introduced. If they have, surface them as "regressions introduced by this run" — those become the next CONVERGENCE input cycle.
 5. Run the documentation clarity gate (below). The docs batch is not closed until every gate passes.
 6. Generate the final state report.
+
+### Pre-exit checklist (hard gate)
+
+Before you produce the final report, the following must be true. If any are not, you are not done: either fix them or revert your work so the tree is clean.
+
+- `git status --porcelain` is empty (apart from pubprep's own `.pubprep/` output dir, which is gitignored). No modified, staged, or untracked files outside `.pubprep/`.
+- `npm run typecheck` exits 0 (if the script exists).
+- `npm test` exits 0 (if the script exists).
+- Every commit you created has a single coherent purpose.
+
+The orchestrator runs an identical post-flight check after you exit. If it finds the tree dirty or the project-defined scripts fail, the run is marked `not_publish_ready` and the user has to clean up by hand. That's a failure mode you should never produce. Cleaner: do not exit until your own checklist is green.
 
 ### Documentation clarity gate (post-execution check)
 
