@@ -29,10 +29,10 @@ describe("orchestrate", () => {
   it("runs all four agents, writes outputs, combined review, and a complete manifest", async () => {
     const mock = createMockSdk(
       {
-        "Tech Debt Reviewer": { textChunks: ["TD report\n"], numTurns: 2 },
-        "README and Documentation Reviewer": { textChunks: ["DOCS report\n"], numTurns: 3 },
-        "Security Reviewer": { textChunks: ["SEC report\n"], numTurns: 4 },
-        "CONVERGENCE": { textChunks: ["CONV report\n"], numTurns: 7 },
+        "tech-debt-reviewer": { textChunks: ["TD report\n"], numTurns: 2 },
+        "readme-docs-reviewer": { textChunks: ["DOCS report\n"], numTurns: 3 },
+        "security-reviewer": { textChunks: ["SEC report\n"], numTurns: 4 },
+        "convergence-resolution-architect": { textChunks: ["CONV report\n"], numTurns: 7 },
       },
     );
 
@@ -132,7 +132,7 @@ describe("orchestrate", () => {
 
   it("aborts before convergence and writes manifest when a reviewer fails", async () => {
     const mock = createMockSdk(
-      { "Security Reviewer": { shouldThrow: new Error("rate limited") } },
+      { "security-reviewer": { shouldThrow: new Error("rate limited") } },
       { textChunks: ["ok\n"] },
     );
     const result = await orchestrate({
@@ -157,16 +157,16 @@ describe("orchestrate", () => {
     const order: string[] = [];
     const mock = createMockSdk(
       {
-        "Tech Debt Reviewer": { textChunks: ["TD\n"] },
-        "README and Documentation Reviewer": { textChunks: ["DOCS\n"] },
-        "Security Reviewer": { textChunks: ["SEC\n"] },
-        "CONVERGENCE": { textChunks: ["CONV\n"] },
+        "tech-debt-reviewer": { textChunks: ["TD\n"] },
+        "readme-docs-reviewer": { textChunks: ["DOCS\n"] },
+        "security-reviewer": { textChunks: ["SEC\n"] },
+        "convergence-resolution-architect": { textChunks: ["CONV\n"] },
       },
     );
     const wrappedQuery: typeof mock.query = (params) => {
-      const sysPrompt = typeof params.options?.systemPrompt === "string" ? params.options.systemPrompt : "";
-      const firstLine = sysPrompt.split("\n", 1)[0] ?? "";
-      order.push(firstLine);
+      if (params.agentName !== undefined) {
+        order.push(params.agentName);
+      }
       return mock.query(params);
     };
     const result = await orchestrate({
@@ -176,16 +176,17 @@ describe("orchestrate", () => {
       parallelReviewers: false,
     });
     expect(result.exitReason).toBe("success");
-    expect(order).toHaveLength(4);
-    expect(order[0]).toContain("Tech Debt Reviewer");
-    expect(order[1]).toContain("README and Documentation Reviewer");
-    expect(order[2]).toContain("Security Reviewer");
-    expect(order[3]).toContain("CONVERGENCE");
+    expect(order).toEqual([
+      "tech-debt-reviewer",
+      "readme-docs-reviewer",
+      "security-reviewer",
+      "convergence-resolution-architect",
+    ]);
   });
 
   it("returns convergence_failure when convergence errors out", async () => {
     const mock = createMockSdk(
-      { CONVERGENCE: { shouldThrow: new Error("convergence boom") } },
+      { "convergence-resolution-architect": { shouldThrow: new Error("convergence boom") } },
       { textChunks: ["ok\n"] },
     );
     const result = await orchestrate({

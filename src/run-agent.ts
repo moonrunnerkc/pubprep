@@ -23,10 +23,20 @@ import { maxTurnsForAgent, modelForAgent } from "./models.js";
  */
 const REVIEWER_ALLOWED_TOOLS: readonly string[] = ["Read", "Grep", "Glob", "Bash"];
 
+/**
+ * Function shape that runAgent uses to invoke the SDK. The real SDK's query()
+ * only reads prompt and options; agentName is a no-op for the real SDK and
+ * exists so test mocks can dispatch on a stable identifier instead of having
+ * to match against a substring of the system prompt.
+ */
 export type QueryFn = (params: {
   prompt: string | AsyncIterable<SDKUserMessage>;
   options?: Options;
+  agentName?: AgentName;
 }) => Query;
+
+const defaultQuery: QueryFn = ({ prompt, options }) =>
+  realQuery({ prompt, options });
 
 export interface RunAgentParams {
   agentName: AgentName;
@@ -68,7 +78,7 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
     outputPath,
     streamToStdout = false,
     maxTurns = maxTurnsForAgent(params.agentName),
-    query = realQuery,
+    query = defaultQuery,
     pathToClaudeCodeExecutable = findClaudeCodeBinary(),
   } = params;
 
@@ -104,7 +114,7 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
     if (pathToClaudeCodeExecutable) {
       options.pathToClaudeCodeExecutable = pathToClaudeCodeExecutable;
     }
-    const q = query({ prompt, options });
+    const q = query({ prompt, options, agentName });
 
     for await (const message of q) {
       handleMessage(message, outputPath, streamToStdout, result);

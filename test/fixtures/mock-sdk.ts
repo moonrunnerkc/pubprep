@@ -1,13 +1,12 @@
 import type {
-  Options,
   Query,
   SDKAssistantMessage,
   SDKMessage,
   SDKResultMessage,
-  SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { randomUUID } from "node:crypto";
 import type { QueryFn } from "../../src/run-agent.js";
+import type { AgentName } from "../../src/paths.js";
 
 export interface MockBehavior {
   textChunks?: string[];
@@ -18,9 +17,10 @@ export interface MockBehavior {
   totalCostUsd?: number;
 }
 
-export type MockMap = Partial<Record<string, MockBehavior>>;
+export type MockMap = Partial<Record<AgentName, MockBehavior>>;
 
 export interface MockSdkCall {
+  agentName: AgentName | undefined;
   systemPromptPreview: string;
   model: string;
   cwd: string | undefined;
@@ -39,15 +39,13 @@ export interface MockSdk {
 export function createMockSdk(behaviors: MockMap, fallback?: MockBehavior): MockSdk {
   const calls: MockSdkCall[] = [];
 
-  const query: QueryFn = (params: {
-    prompt: string | AsyncIterable<SDKUserMessage>;
-    options?: Options;
-  }): Query => {
+  const query: QueryFn = (params): Query => {
     const opts = params.options ?? {};
     const systemPrompt = typeof opts.systemPrompt === "string" ? opts.systemPrompt : "";
     const preview = systemPrompt.split("\n", 1)[0] ?? "";
     const promptStr = typeof params.prompt === "string" ? params.prompt : undefined;
     calls.push({
+      agentName: params.agentName,
       systemPromptPreview: preview,
       model: opts.model ?? "",
       cwd: opts.cwd,
@@ -58,7 +56,7 @@ export function createMockSdk(behaviors: MockMap, fallback?: MockBehavior): Mock
       allowedTools: opts.allowedTools,
     });
 
-    const behavior = pickBehavior(preview, behaviors, fallback);
+    const behavior = pickBehavior(params.agentName, behaviors, fallback);
     return makeQuery(behavior);
   };
 
@@ -66,13 +64,14 @@ export function createMockSdk(behaviors: MockMap, fallback?: MockBehavior): Mock
 }
 
 function pickBehavior(
-  preview: string,
+  agentName: AgentName | undefined,
   behaviors: MockMap,
   fallback: MockBehavior | undefined,
 ): MockBehavior {
-  for (const key of Object.keys(behaviors)) {
-    if (preview.includes(key)) {
-      return behaviors[key]!;
+  if (agentName !== undefined) {
+    const match = behaviors[agentName];
+    if (match !== undefined) {
+      return match;
     }
   }
   return fallback ?? { textChunks: ["mock output\n"] };
