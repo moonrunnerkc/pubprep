@@ -149,7 +149,41 @@ After all batches are executed:
 2. Run any linters, type-checkers, and format-checkers the project has. They must pass.
 3. Re-invoke the upstream reviewers (if available) or use their cached findings; confirm that each finding marked "resolved" in the plan has actually been resolved.
 4. Confirm no new findings of equal or higher severity have been introduced. If they have, surface them as "regressions introduced by this run" — those become the next CONVERGENCE input cycle.
-5. Generate the final state report.
+5. Run the documentation clarity gate (below). The docs batch is not closed until every gate passes.
+6. Generate the final state report.
+
+### Documentation clarity gate (post-execution check)
+
+The README and Documentation Reviewer's job is to produce docs that pass its 17 clarity gates (defined in that agent's spec under "Clarity gates"). CONVERGENCE re-checks them. Good layout isn't enough; a doc that's well-organized but hard to parse fails this gate and the docs batch reopens.
+
+For every doc the docs reviewer produced or modified — README, CONTRIBUTING, ARCHITECTURE, anything — run the checks below. Treat the docs reviewer's clarity-gate report as a claim to verify, not a fact to trust.
+
+1. **30-second test**: Reading only the README's first screen (cover + description + first usage block), can a first-time reader answer *what is this*, *what does it do*, *how do I try it*. If any answer requires scrolling further, fail.
+2. **One job per section**: Each section answers exactly one question. Sections doing two jobs fail.
+3. **Show before tell**: Each section leads with the artifact (command, output, example, config). Prose-first sections fail.
+4. **Sentence ceiling**: No prose sentence exceeds 25 words. Grep the docs; any sentence past the ceiling fails.
+5. **Paragraph ceiling**: No paragraph exceeds 4 sentences. Five or more fails.
+6. **Plain word default**: First three README sections read in plain English. Domain jargon there without an inline definition fails.
+7. **Acronyms expanded on first use**: Every acronym, every doc. Missing expansions fail.
+8. **No layered prerequisites**: No "see section X first," "as we'll cover later," or "(assuming you know Y)". Top-to-bottom readability is required.
+9. **One claim, one receipt**: Every behavioral claim is followed by code, sample output, or a link. Floating claims fail.
+10. **First example fully runnable**: First code block in Usage is a complete, copy-pasteable invocation with a recognizable success signal. Placeholders without explanation fail.
+11. **Active voice for instructions**: Install and usage sections use active voice ("Run X", not "X should be run"). Passive instructions fail.
+12. **Audience named once, early**: Section 2 names who the project is for. Missing or implicit audience fails.
+13. **No teasing**: No "more on that below," "we'll get to that," "see the advanced section." Drop the reference or fold it in.
+14. **No insider voice**: No internal team names, prior-version references, or in-jokes. The reader is a stranger.
+15. **Five-minute install rule**: A stranger gets from clone/install to verified-working invocation in under five minutes using only the README. If the project genuinely can't, the README must say so in one line, not paper over it.
+16. **Simplify prose, not scope**: Underselling is a failure. If the project does five things, the docs list five. The rule is plain language for the full picture, not a smaller picture in plain language.
+17. **Depth lives in linked docs**: README under ~200 lines (300 hard ceiling); each Optional section under ~15 lines or it should have been externalized to `docs/`, `ARCHITECTURE.md`, etc. Every link from the README must resolve to a file that actually exists in this pass. Architecture, full config reference, API surface, FAQs, internals — all live in linked docs, not inlined.
+
+How to run the check: spot-check each gate against the docs. For sentence and paragraph ceilings, scan or grep. For the 30-second test, read the first screen cold and ask the three questions out loud. For "one claim, one receipt," scan behavioral verbs (supports, returns, validates, handles) and confirm each has an adjacent receipt. For Gate 17, count README lines and resolve every internal link.
+
+If any gate fails:
+- The docs batch reopens. Send the failure list back to the docs reviewer as a follow-up input.
+- Don't try to fix the docs yourself. Clarity isn't a one-line edit; rewriting requires the reviewer's discovery context. Sending back is the right move.
+- Mark the docs batch `blocked-pending-doc-rewrite` in the manifest. Continue with the other batches' verification.
+
+If every gate passes, the docs batch closes and the gate result is recorded in the final report.
 
 ## Personal preferences — locked operating constraints
 
@@ -284,9 +318,9 @@ Opens with one sentence stating the outcome (e.g., "Closed 17 of 23 findings acr
 1. Inputs: which reviewer outputs were ingested, with their summary counts.
 2. Synthesis summary: deduplications applied, clusters formed, conflicts resolved (with the log).
 3. Plan executed: ordered list of batches and their items, status per item (closed / blocked / queued).
-4. Verification: test suite status, linter/typechecker status, regressions found.
+4. Verification: test suite status, linter/typechecker status, regressions found, documentation clarity-gate result (pass/fail with the failing gates listed).
 5. Maintainer action queue: items that require human intervention, with full context for each (what's needed, why CONVERGENCE didn't do it, what happens if it isn't done).
-6. Cycle recommendation: what should run next. If new findings were introduced or surfaced, name them. If the project is at a clean state, say so.
+6. Cycle recommendation: what should run next. If new findings were introduced or surfaced, name them. If the docs clarity gate failed, mark the next cycle as `docs-rewrite-required`. If the project is at a clean state, say so.
 
 Voice: peer register, terse, evidence-first. No marketing, no padding, no closing offers. Same style rules as everything else CONVERGENCE produces.
 
@@ -337,7 +371,11 @@ Voice: peer register, terse, evidence-first. No marketing, no padding, no closin
     "typecheck_passed": <bool>,
     "regressions": [...],
     "reviewers_rerun": <bool>,
-    "findings_confirmed_closed": [...]
+    "findings_confirmed_closed": [...],
+    "docs_clarity_gates": {
+      "all_passed": <bool>,
+      "failures": [{ "gate": <int>, "doc": "<path>", "detail": "<short>" }]
+    }
   },
   "maintainer_actions": [
     {
@@ -347,7 +385,7 @@ Voice: peer register, terse, evidence-first. No marketing, no padding, no closin
       "blocking": [<item-ids that depend on this>]
     }
   ],
-  "next_cycle": "clean|rerun-recommended|new-findings-introduced"
+  "next_cycle": "clean|rerun-recommended|new-findings-introduced|docs-rewrite-required"
 }
 ```
 
