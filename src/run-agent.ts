@@ -24,6 +24,31 @@ import { maxTurnsForAgent, modelForAgent } from "./models.js";
 const REVIEWER_ALLOWED_TOOLS: readonly string[] = ["Read", "Grep", "Glob", "Bash"];
 
 /**
+ * Bash patterns convergence is not allowed to invoke. The convergence agent
+ * needs write access to fix findings, but the input it consumes
+ * (combined-review.md) is a concatenation of reviewer outputs, which in turn
+ * may quote untrusted content from the reviewed repository. An indirect prompt
+ * injection in that content could try to steer convergence into irreversible
+ * operations. Convergence's system prompt declares these as halt conditions;
+ * the disallowedTools list enforces them at the SDK layer too.
+ */
+const CONVERGENCE_DISALLOWED_TOOLS: readonly string[] = [
+  "Bash(git push:*)",
+  "Bash(git push --force:*)",
+  "Bash(git push -f:*)",
+  "Bash(git filter-branch:*)",
+  "Bash(git filter-repo:*)",
+  "Bash(git reset --hard:*)",
+  "Bash(git branch -D:*)",
+  "Bash(git tag -d:*)",
+  "Bash(rm -rf:*)",
+  "Bash(npm publish:*)",
+  "Bash(npm unpublish:*)",
+  "Bash(gh release:*)",
+  "Bash(gh secret:*)",
+];
+
+/**
  * Function shape that runAgent uses to invoke the SDK. The real SDK's query()
  * only reads prompt and options; agentName is a no-op for the real SDK and
  * exists so test mocks can dispatch on a stable identifier instead of having
@@ -108,7 +133,9 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
       permissionMode: "bypassPermissions",
       maxTurns,
     };
-    if (agentName !== CONVERGENCE_AGENT_NAME) {
+    if (agentName === CONVERGENCE_AGENT_NAME) {
+      options.disallowedTools = [...CONVERGENCE_DISALLOWED_TOOLS];
+    } else {
       options.allowedTools = [...REVIEWER_ALLOWED_TOOLS];
     }
     if (pathToClaudeCodeExecutable) {

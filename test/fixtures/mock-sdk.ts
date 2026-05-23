@@ -29,6 +29,7 @@ export interface MockSdkCall {
   maxTurns: number | undefined;
   prompt: string | undefined;
   allowedTools: readonly string[] | undefined;
+  disallowedTools: readonly string[] | undefined;
 }
 
 export interface MockSdk {
@@ -54,6 +55,7 @@ export function createMockSdk(behaviors: MockMap, fallback?: MockBehavior): Mock
       maxTurns: opts.maxTurns,
       prompt: promptStr,
       allowedTools: opts.allowedTools,
+      disallowedTools: opts.disallowedTools,
     });
 
     const behavior = pickBehavior(params.agentName, behaviors, fallback);

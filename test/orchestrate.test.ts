@@ -102,7 +102,7 @@ describe("orchestrate", () => {
     expect(mock.calls[3].maxTurns).toBe(300);
   });
 
-  it("restricts reviewer agents to read-only tools and grants convergence the full toolset", async () => {
+  it("restricts reviewer agents to read-only tools and gives convergence a disallowed list", async () => {
     const mock = createMockSdk({}, { textChunks: ["x\n"] });
     await orchestrate({
       projectRoot: repo,
@@ -112,8 +112,18 @@ describe("orchestrate", () => {
     expect(mock.calls).toHaveLength(4);
     for (const reviewerCall of mock.calls.slice(0, 3)) {
       expect(reviewerCall.allowedTools).toEqual(["Read", "Grep", "Glob", "Bash"]);
+      expect(reviewerCall.disallowedTools).toBeUndefined();
     }
-    expect(mock.calls[3].allowedTools).toBeUndefined();
+    const convergence = mock.calls[3];
+    expect(convergence.allowedTools).toBeUndefined();
+    expect(convergence.disallowedTools).toEqual(
+      expect.arrayContaining([
+        "Bash(git push:*)",
+        "Bash(git filter-repo:*)",
+        "Bash(rm -rf:*)",
+        "Bash(npm publish:*)",
+      ]),
+    );
   });
 
   it("--dry-run skips convergence and exits success", async () => {
