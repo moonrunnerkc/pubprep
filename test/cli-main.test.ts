@@ -60,6 +60,7 @@ function successfulOrchestrate(): Awaited<ReturnType<typeof orchestrate>> {
       convergence_branch: null,
       exit_reason: "success",
       publish_gate: null,
+      pull_request: null,
       warnings: [],
     },
   };
@@ -231,7 +232,7 @@ describe("main()", () => {
     expect(orchestrateMock.mock.calls[0]?.[0]?.publishGate).toBe(false);
   });
 
-  it("prints publish-ready and a push hint on success when a branch is set", async () => {
+  it("prints publish-ready and a push hint on success when the PR phase did not run", async () => {
     repo = makeCleanRepo();
     findBinaryMock.mockReturnValue("/opt/homebrew/bin/claude");
     const base = successfulOrchestrate();
@@ -249,6 +250,100 @@ describe("main()", () => {
     expect(out).toMatch(
       /git push -u origin convergence\/2026-05-22-fixes/,
     );
+  });
+
+  it("prints the PR URL on success when openPullRequest opened a new PR", async () => {
+    repo = makeCleanRepo();
+    findBinaryMock.mockReturnValue("/opt/homebrew/bin/claude");
+    const base = successfulOrchestrate();
+    orchestrateMock.mockResolvedValueOnce({
+      ...base,
+      manifest: {
+        ...base.manifest,
+        convergence_branch: "convergence/2026-05-22-fixes",
+        pull_request: {
+          ran: true,
+          opened: true,
+          existed: false,
+          url: "https://github.com/o/r/pull/12",
+          branch: "convergence/2026-05-22-fixes",
+          skipped: null,
+          failure: null,
+        },
+      },
+    });
+    const code = await main([], { cwd: repo, home: fakeHome });
+    expect(code).toBe(0);
+    const out = stdoutText();
+    expect(out).toMatch(/publish-ready: yes/);
+    expect(out).toMatch(/PR opened: https:\/\/github\.com\/o\/r\/pull\/12/);
+    expect(out).toMatch(/review the PR on GitHub and merge/);
+  });
+
+  it("prints the existing PR URL when the branch already has one", async () => {
+    repo = makeCleanRepo();
+    findBinaryMock.mockReturnValue("/opt/homebrew/bin/claude");
+    const base = successfulOrchestrate();
+    orchestrateMock.mockResolvedValueOnce({
+      ...base,
+      manifest: {
+        ...base.manifest,
+        convergence_branch: "convergence/2026-05-22-fixes",
+        pull_request: {
+          ran: true,
+          opened: false,
+          existed: true,
+          url: "https://github.com/o/r/pull/9",
+          branch: "convergence/2026-05-22-fixes",
+          skipped: null,
+          failure: null,
+        },
+      },
+    });
+    const code = await main([], { cwd: repo, home: fakeHome });
+    expect(code).toBe(0);
+    const out = stdoutText();
+    expect(out).toMatch(/PR already open .* https:\/\/github\.com\/o\/r\/pull\/9/);
+  });
+
+  it("prints a skip reason and manual hint when PR-open was skipped (e.g. gh missing)", async () => {
+    repo = makeCleanRepo();
+    findBinaryMock.mockReturnValue("/opt/homebrew/bin/claude");
+    const base = successfulOrchestrate();
+    orchestrateMock.mockResolvedValueOnce({
+      ...base,
+      manifest: {
+        ...base.manifest,
+        convergence_branch: "convergence/2026-05-22-fixes",
+        pull_request: {
+          ran: true,
+          opened: false,
+          existed: false,
+          url: null,
+          branch: "convergence/2026-05-22-fixes",
+          skipped: {
+            check: "gh_installed",
+            detail: "GitHub CLI (gh) is not installed.",
+          },
+          failure: null,
+        },
+      },
+    });
+    const code = await main([], { cwd: repo, home: fakeHome });
+    expect(code).toBe(0);
+    const out = stdoutText();
+    expect(out).toMatch(/PR not opened \(gh_installed\)/);
+    expect(out).toMatch(
+      /git push -u origin convergence\/2026-05-22-fixes && gh pr create --fill --head convergence\/2026-05-22-fixes/,
+    );
+  });
+
+  it("forwards --no-open-pr to orchestrate", async () => {
+    repo = makeCleanRepo();
+    findBinaryMock.mockReturnValue("/opt/homebrew/bin/claude");
+    const code = await main(["--no-open-pr"], { cwd: repo, home: fakeHome });
+    expect(code).toBe(0);
+    expect(orchestrateMock.mock.calls[0]?.[0]?.openPr).toBe(false);
   });
 
   it("prints publish-ready: NO and the failure detail when the gate fails", async () => {

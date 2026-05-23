@@ -24,6 +24,7 @@ export type CliArgs = {
   version: boolean;
   maxBudgetUsd: number | null;
   publishGate: boolean;
+  openPr: boolean;
 };
 
 const DEFAULT_MAX_BUDGET_USD = 20;
@@ -53,6 +54,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     version: false,
     maxBudgetUsd: DEFAULT_MAX_BUDGET_USD,
     publishGate: true,
+    openPr: true,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -76,6 +78,9 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         break;
       case "--no-publish-gate":
         args.publishGate = false;
+        break;
+      case "--no-open-pr":
+        args.openPr = false;
         break;
       case "--max-budget-usd": {
         const raw = argv[i + 1];
@@ -119,6 +124,10 @@ Options:
                            when your project doesn't define those scripts or
                            when you intentionally want the convergence agent
                            to leave the working tree dirty for manual review.
+  --no-open-pr             Skip the final phase that pushes the convergence
+                           branch and opens a GitHub pull request via 'gh'.
+                           Use when you want to inspect the branch locally
+                           before publishing, or when 'gh' is unavailable.
   -h, --help               Show this message.
   -v, --version            Print the pubprep version.
 
@@ -215,6 +224,7 @@ export async function main(
       parallelReviewers: !usingSubscription,
       maxBudgetUsd: parsed.maxBudgetUsd,
       publishGate: parsed.publishGate,
+      openPr: parsed.openPr,
     });
     printSummary(result, usingSubscription);
     return result.exitReason === "success" ? 0 : 2;
@@ -254,11 +264,7 @@ function printPublishGateBlock(
   const branch = result.manifest.convergence_branch;
   if (result.exitReason === "success") {
     process.stdout.write("\npublish-ready: yes\n");
-    if (branch) {
-      process.stdout.write(
-        `next: git push -u origin ${branch}    # then open a PR, or merge to main\n`,
-      );
-    }
+    printPullRequestLine(result, branch);
     return;
   }
   if (result.exitReason === "not_publish_ready") {
@@ -275,6 +281,60 @@ function printPublishGateBlock(
     process.stdout.write(
       "next: review the failures above on the convergence branch, fix them, commit, then push.\n",
     );
+  }
+}
+
+function printPullRequestLine(
+  result: Awaited<ReturnType<typeof orchestrate>>,
+  branch: string | null,
+): void {
+  const pr = result.manifest.pull_request;
+  if (!pr || !pr.ran) {
+    if (branch) {
+      process.stdout.write(
+        `next: git push -u origin ${branch}    # then open a PR, or merge to main\n`,
+      );
+    }
+    return;
+  }
+  if (pr.opened && pr.url) {
+    process.stdout.write(`PR opened: ${pr.url}\n`);
+    process.stdout.write("next: review the PR on GitHub and merge.\n");
+    return;
+  }
+  if (pr.existed && pr.url) {
+    process.stdout.write(`PR already open (updated): ${pr.url}\n`);
+    process.stdout.write("next: review the PR on GitHub and merge.\n");
+    return;
+  }
+  if (pr.opened && !pr.url) {
+    process.stdout.write(
+      "PR opened (URL not captured — check 'gh pr list').\n",
+    );
+    return;
+  }
+  if (pr.skipped) {
+    process.stdout.write(`PR not opened (${pr.skipped.check}):\n`);
+    for (const line of pr.skipped.detail.split("\n")) {
+      process.stdout.write(`  ${line}\n`);
+    }
+    if (branch) {
+      process.stdout.write(
+        `next: git push -u origin ${branch} && gh pr create --fill --head ${branch}\n`,
+      );
+    }
+    return;
+  }
+  if (pr.failure) {
+    process.stdout.write(`PR open failed (${pr.failure.check}):\n`);
+    for (const line of pr.failure.detail.split("\n")) {
+      process.stdout.write(`  ${line}\n`);
+    }
+    if (branch) {
+      process.stdout.write(
+        `next: resolve the issue above, then 'git push -u origin ${branch} && gh pr create --fill --head ${branch}'.\n`,
+      );
+    }
   }
 }
 

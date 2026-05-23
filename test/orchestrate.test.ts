@@ -5,6 +5,25 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { orchestrate } from "../src/orchestrate.js";
 import { createMockSdk } from "./fixtures/mock-sdk.js";
+import type { ExecFn, ExecResult } from "../src/publish-pr.js";
+
+function recordingPrExec(
+  handler: (cmd: string, args: readonly string[]) => ExecResult,
+): { exec: ExecFn; calls: Array<{ cmd: string; args: string[] }> } {
+  const calls: Array<{ cmd: string; args: string[] }> = [];
+  const exec: ExecFn = (cmd, args) => {
+    calls.push({ cmd, args: [...args] });
+    return handler(cmd, args);
+  };
+  return { exec, calls };
+}
+
+function alwaysSkipPrExec(): ExecFn {
+  return (cmd) =>
+    cmd === "gh"
+      ? { ok: false, stdout: "", stderr: "gh not available" }
+      : { ok: true, stdout: "", stderr: "" };
+}
 
 function makeRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), "pubprep-int-"));
@@ -41,6 +60,7 @@ describe("orchestrate", () => {
       projectRoot: repo,
       now,
       query: mock.query,
+      openPr: false,
     });
 
     expect(result.exitReason).toBe("success");
@@ -85,6 +105,7 @@ describe("orchestrate", () => {
       projectRoot: repo,
       now: new Date(Date.UTC(2026, 4, 22, 15, 0, 0)),
       query: mock.query,
+      openPr: false,
     });
     expect(mock.calls).toHaveLength(4);
     for (const c of mock.calls) {
@@ -108,6 +129,7 @@ describe("orchestrate", () => {
       projectRoot: repo,
       now: new Date(Date.UTC(2026, 4, 22, 15, 30, 0)),
       query: mock.query,
+      openPr: false,
     });
     expect(mock.calls).toHaveLength(4);
     for (const reviewerCall of mock.calls.slice(0, 3)) {
@@ -184,6 +206,7 @@ describe("orchestrate", () => {
       now: new Date(Date.UTC(2026, 4, 22, 19, 0, 0)),
       query: wrappedQuery,
       parallelReviewers: false,
+      openPr: false,
     });
     expect(result.exitReason).toBe("success");
     expect(order).toEqual([
@@ -253,9 +276,132 @@ describe("orchestrate", () => {
       now: new Date(Date.UTC(2026, 4, 22, 21, 0, 0)),
       query: dirtyMock.query,
       publishGate: false,
+      openPr: false,
     });
     expect(result.exitReason).toBe("success");
     const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
     expect(manifest.publish_gate.ran).toBe(false);
+  });
+
+  it("runs the PR phase after a passing publish gate and records the result in manifest.pull_request", async () => {
+    const mock = createMockSdk({}, { textChunks: ["x\n"] });
+    const { exec, calls } = recordingPrExec((cmd, args) => {
+      const a = args.join(" ");
+      if (cmd === "gh" && a === "--version") return { ok: true, stdout: "gh 2.0.0", stderr: "" };
+      if (cmd === "gh" && a.startsWith("auth status")) return { ok: true, stdout: "ok", stderr: "" };
+      if (cmd === "git" && a === "remote get-url origin") {
+        return { ok: true, stdout: "https://github.com/a/b.git\n", stderr: "" };
+      }
+      if (cmd === "gh" && a.startsWith("repo view")) return { ok: true, stdout: "production\n", stderr: "" };
+      if (cmd === "git" && a.startsWith("push -u origin")) return { ok: true, stdout: "", stderr: "" };
+      if (cmd === "gh" && a.startsWith("pr view")) return { ok: false, stdout: "", stderr: "no pr" };
+      if (cmd === "gh" && a.startsWith("pr create")) {
+        return { ok: true, stdout: "https://github.com/a/b/pull/77\n", stderr: "" };
+      }
+      return { ok: false, stdout: "", stderr: `unexpected ${cmd} ${a}` };
+    });
+
+    const result = await orchestrate({
+      projectRoot: repo,
+      now: new Date(Date.UTC(2026, 4, 22, 22, 0, 0)),
+      query: mock.query,
+      prExec: exec,
+    });
+    expect(result.exitReason).toBe("success");
+    const pr = result.manifest.pull_request;
+    expect(pr).not.toBeNull();
+    expect(pr?.ran).toBe(true);
+    expect(pr?.opened).toBe(true);
+    expect(pr?.url).toBe("https://github.com/a/b/pull/77");
+    expect(calls.some((c) => c.cmd === "git" && c.args.includes("push"))).toBe(true);
+    expect(
+      calls.some((c) => c.cmd === "gh" && c.args[0] === "pr" && c.args[1] === "create"),
+    ).toBe(true);
+  });
+
+  it("skips the PR phase when the publish gate fails", async () => {
+    const dirtyMock = createMockSdk(
+      {
+        "convergence-resolution-architect": {
+          textChunks: ["CONV\n"],
+          onCall: () => {
+            writeFileSync(join(repo, "leftover.txt"), "still dirty\n");
+          },
+        },
+      },
+      { textChunks: ["ok\n"] },
+    );
+    const { exec, calls } = recordingPrExec(() => ({
+      ok: true,
+      stdout: "",
+      stderr: "",
+    }));
+    const result = await orchestrate({
+      projectRoot: repo,
+      now: new Date(Date.UTC(2026, 4, 22, 22, 30, 0)),
+      query: dirtyMock.query,
+      prExec: exec,
+    });
+    expect(result.exitReason).toBe("not_publish_ready");
+    expect(result.manifest.pull_request?.ran).toBe(false);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("openPr=false skips the PR phase even when the gate passes", async () => {
+    const mock = createMockSdk({}, { textChunks: ["x\n"] });
+    const { exec, calls } = recordingPrExec(() => ({
+      ok: true,
+      stdout: "",
+      stderr: "",
+    }));
+    const result = await orchestrate({
+      projectRoot: repo,
+      now: new Date(Date.UTC(2026, 4, 22, 22, 45, 0)),
+      query: mock.query,
+      openPr: false,
+      prExec: exec,
+    });
+    expect(result.exitReason).toBe("success");
+    expect(result.manifest.pull_request?.ran).toBe(false);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("records a failure (but keeps exit_reason success) when the PR phase fails", async () => {
+    const mock = createMockSdk({}, { textChunks: ["x\n"] });
+    const { exec } = recordingPrExec((cmd, args) => {
+      const a = args.join(" ");
+      if (cmd === "gh" && a === "--version") return { ok: true, stdout: "gh 2.0.0", stderr: "" };
+      if (cmd === "gh" && a.startsWith("auth status")) return { ok: true, stdout: "ok", stderr: "" };
+      if (cmd === "git" && a === "remote get-url origin") {
+        return { ok: true, stdout: "https://github.com/a/b.git\n", stderr: "" };
+      }
+      if (cmd === "gh" && a.startsWith("repo view")) return { ok: true, stdout: "production\n", stderr: "" };
+      if (cmd === "git" && a.startsWith("push -u origin")) {
+        return { ok: false, stdout: "", stderr: "rejected: non-fast-forward" };
+      }
+      return { ok: false, stdout: "", stderr: `unexpected ${cmd} ${a}` };
+    });
+    const result = await orchestrate({
+      projectRoot: repo,
+      now: new Date(Date.UTC(2026, 4, 22, 23, 0, 0)),
+      query: mock.query,
+      prExec: exec,
+    });
+    expect(result.exitReason).toBe("success");
+    expect(result.manifest.pull_request?.failure?.check).toBe("push");
+    expect(result.manifest.warnings.some((w) => w.startsWith("open pr (push)"))).toBe(true);
+  });
+
+  it("uses the silently-skipping prExec when no gh is available and still succeeds", async () => {
+    const mock = createMockSdk({}, { textChunks: ["x\n"] });
+    const exec = alwaysSkipPrExec();
+    const result = await orchestrate({
+      projectRoot: repo,
+      now: new Date(Date.UTC(2026, 4, 22, 23, 30, 0)),
+      query: mock.query,
+      prExec: exec,
+    });
+    expect(result.exitReason).toBe("success");
+    expect(result.manifest.pull_request?.skipped?.check).toBe("gh_installed");
   });
 });

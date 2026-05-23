@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseArgs, USAGE, VERSION } from "../src/cli.js";
 
 describe("parseArgs", () => {
-  it("defaults to a non-dry, non-allow-dirty run with the default budget cap and publish gate on", () => {
+  it("defaults to a non-dry, non-allow-dirty run with the default budget cap, publish gate on, and PR-open on", () => {
     const a = parseArgs([]);
     expect(a).toEqual({
       dryRun: false,
@@ -11,11 +11,16 @@ describe("parseArgs", () => {
       version: false,
       maxBudgetUsd: 20,
       publishGate: true,
+      openPr: true,
     });
   });
 
   it("parses --no-publish-gate", () => {
     expect(parseArgs(["--no-publish-gate"]).publishGate).toBe(false);
+  });
+
+  it("parses --no-open-pr", () => {
+    expect(parseArgs(["--no-open-pr"]).openPr).toBe(false);
   });
 
   it("parses --max-budget-usd <n>", () => {
@@ -75,6 +80,7 @@ describe("CLI constants", () => {
     expect(USAGE).toContain("--max-budget-usd");
     expect(USAGE).toContain("--no-max-budget-usd");
     expect(USAGE).toContain("--no-publish-gate");
+    expect(USAGE).toContain("--no-open-pr");
     expect(USAGE).toContain("ANTHROPIC_API_KEY");
   });
 

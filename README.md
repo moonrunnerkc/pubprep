@@ -4,7 +4,7 @@
 
 # pubprep
 
-`pubprep` runs three AI reviewer agents (tech debt, docs, security) against the git repo in your current directory, then a convergence agent that reads their combined output and applies fixes on a new branch. One command from "almost ready" to "worth merging."
+`pubprep` runs three AI reviewer agents (tech debt, docs, security) against the git repo in your current directory, then a convergence agent that reads their combined output and applies fixes on a new branch. After a clean publish-readiness gate (clean tree + typecheck + tests), pubprep pushes the branch to `origin` and opens a GitHub pull request via `gh`. One command from "almost ready" to "click merge."
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](./LICENSE)
 [![Node: ≥18](https://img.shields.io/badge/node-%E2%89%A518-brightgreen?style=flat-square)](https://nodejs.org)
@@ -50,14 +50,18 @@ Add `.pubprep/` to `.gitignore` in any project you run pubprep against; that's w
 ## Usage
 
 ```bash
-pubprep                # full run: three reviewers, then convergence
-pubprep --dry-run      # reviewers only; skip convergence
-pubprep --allow-dirty  # proceed even with uncommitted changes
+pubprep                  # full run: reviewers → convergence → publish gate → push + open PR
+pubprep --dry-run        # reviewers only; skip convergence
+pubprep --allow-dirty    # proceed even with uncommitted changes
+pubprep --no-publish-gate  # skip the clean-tree + typecheck + test gate
+pubprep --no-open-pr     # skip the push + 'gh pr create' phase
 pubprep --help
 pubprep --version
 ```
 
 pubprep requires a clean working tree by default. Commit or stash before running, or pass `--allow-dirty` to skip the check.
+
+To get the auto-PR behavior, install the [GitHub CLI](https://cli.github.com) (`brew install gh`) and run `gh auth login` once. If `gh` is missing, unauthenticated, or `origin` isn't a GitHub remote, pubprep records the reason in the manifest and prints the manual `git push && gh pr create` commands instead — your local commits are still good either way.
 
 Exit codes:
 - `0`: clean run
@@ -82,7 +86,7 @@ Each run writes to a timestamped directory and updates a `latest` symlink:
             └── convergence-report.md
 ```
 
-`manifest.json` records the run ID, target repo path, HEAD SHA at run time, per-agent model, turn count, wall time, USD cost (in API-key mode), convergence branch name, and exit reason.
+`manifest.json` records the run ID, target repo path, HEAD SHA at run time, per-agent model, turn count, wall time, USD cost (in API-key mode), convergence branch name, exit reason, the publish-gate result, and the pull-request result (URL, opened/existed, or skip/failure reason).
 
 ## Architecture
 
@@ -99,6 +103,10 @@ pubprep
         concatenate to combined-review.md
              ↓
         run-agent(convergence) ─ streams to stdout, commits, creates branch
+             ↓
+        publish gate (clean tree + npm run typecheck + npm test)
+             ↓ (on pass)
+        open PR (git push -u origin <branch> + gh pr create --fill)
              ↓
         write manifest, update .pubprep/latest symlink
 ```

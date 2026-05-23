@@ -31,6 +31,12 @@ import {
   verifyPublishReadiness,
   type PublishGateResult,
 } from "./publish-gate.js";
+import {
+  openPullRequest,
+  skippedPublishPr,
+  type ExecFn,
+  type PublishPrResult,
+} from "./publish-pr.js";
 
 export type ExitReason =
   | "success"
@@ -65,6 +71,20 @@ export interface OrchestrateParams {
    * where the convergence agent intentionally leaves the tree dirty.
    */
   publishGate?: boolean;
+  /**
+   * After the publish gate passes, push the convergence branch to origin
+   * and open a GitHub pull request via `gh pr create`. The result is
+   * recorded in manifest.pull_request. A failure here does not change
+   * exit_reason — the local commits are still good and the user can
+   * push/PR manually. Defaults to true. Requires the `gh` CLI installed
+   * and authenticated and an `origin` remote pointing at GitHub.
+   */
+  openPr?: boolean;
+  /**
+   * Override the command executor used by the open-PR phase. Tests inject
+   * this to avoid actually shelling out to git/gh.
+   */
+  prExec?: ExecFn;
 }
 
 export interface OrchestrateResult {
@@ -103,6 +123,8 @@ export async function orchestrate(
     parallelReviewers = true,
     maxBudgetUsd = null,
     publishGate = true,
+    openPr = true,
+    prExec,
   } = params;
 
   const runId = formatRunTimestamp(now);
@@ -208,11 +230,30 @@ export async function orchestrate(
 
   const exitReason: ExitReason = gate.passed ? "success" : "not_publish_ready";
   manifest.exit_reason = exitReason;
+
+  const branch = manifest.convergence_branch;
+  const pr: PublishPrResult =
+    openPr && gate.passed && branch !== null && branch.length > 0
+      ? (log("phase 5: opening pull request"),
+        openPullRequest({ projectRoot, branch, log, exec: prExec }))
+      : skippedPublishPr();
+  manifest.pull_request = pr;
+  if (pr.failure) {
+    manifest.warnings.push(
+      `open pr (${pr.failure.check}): ${firstLine(pr.failure.detail)}`,
+    );
+  }
+
   manifest.finished_at = new Date().toISOString();
   writeManifest(manifestPath, manifest);
   updateLatestSymlink(projectRoot, runDir);
 
   return { runDir, manifestPath, exitReason, manifest };
+}
+
+function firstLine(text: string): string {
+  const idx = text.indexOf("\n");
+  return idx === -1 ? text : text.slice(0, idx);
 }
 
 async function runReviewersInParallel(args: {
