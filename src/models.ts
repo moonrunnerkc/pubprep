@@ -15,5 +15,3 @@ export function maxTurnsForAgent(agent: AgentName): number {
     ? CONVERGENCE_MAX_TURNS
     : REVIEWER_MAX_TURNS;
 }
-
-export const DEFAULT_MAX_TURNS = REVIEWER_MAX_TURNS;
