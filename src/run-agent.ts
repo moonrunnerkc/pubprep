@@ -96,7 +96,6 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
       cwd,
       settingSources: [],
       permissionMode: "bypassPermissions",
-      allowDangerouslySkipPermissions: true,
       maxTurns,
     };
     if (agentName !== CONVERGENCE_AGENT_NAME) {
