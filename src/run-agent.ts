@@ -9,7 +9,7 @@ import {
 } from "@anthropic-ai/claude-agent-sdk";
 import { findClaudeCodeBinary } from "./claude-code.js";
 import { type AgentName, getAgentDefinitionPath } from "./paths.js";
-import { DEFAULT_MAX_TURNS, modelForAgent } from "./models.js";
+import { maxTurnsForAgent, modelForAgent } from "./models.js";
 
 export type QueryFn = (params: {
   prompt: string | AsyncIterable<SDKUserMessage>;
@@ -55,7 +55,7 @@ export async function runAgent(params: RunAgentParams): Promise<RunAgentResult> 
     cwd,
     outputPath,
     streamToStdout = false,
-    maxTurns = DEFAULT_MAX_TURNS,
+    maxTurns = maxTurnsForAgent(params.agentName),
     query = realQuery,
     pathToClaudeCodeExecutable = findClaudeCodeBinary(),
   } = params;

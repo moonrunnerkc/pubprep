@@ -91,12 +91,15 @@ describe("orchestrate", () => {
       expect(c.cwd).toBe(repo);
       expect(c.permissionMode).toBe("bypassPermissions");
       expect(c.settingSources).toEqual([]);
-      expect(c.maxTurns).toBe(100);
     }
     expect(mock.calls[0].model).toBe("claude-sonnet-4-6");
+    expect(mock.calls[0].maxTurns).toBe(100);
     expect(mock.calls[1].model).toBe("claude-sonnet-4-6");
+    expect(mock.calls[1].maxTurns).toBe(100);
     expect(mock.calls[2].model).toBe("claude-sonnet-4-6");
+    expect(mock.calls[2].maxTurns).toBe(100);
     expect(mock.calls[3].model).toBe("claude-opus-4-7");
+    expect(mock.calls[3].maxTurns).toBe(300);
   });
 
   it("--dry-run skips convergence and exits success", async () => {
