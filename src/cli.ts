@@ -1,8 +1,13 @@
 #!/usr/bin/env node
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { findClaudeCodeBinary } from "./claude-code.js";
-import { loadEnv } from "./env.js";
+import {
+  InvalidApiKeyError,
+  loadEnv,
+  MissingApiKeyError,
+  requireApiKey,
+} from "./env.js";
 import { orchestrate } from "./orchestrate.js";
 import {
   checkEnvFilePresentAndIgnored,
@@ -19,7 +24,22 @@ export type CliArgs = {
   version: boolean;
 };
 
-export const VERSION = "0.1.0";
+export const VERSION: string = readPackageVersion();
+
+function readPackageVersion(): string {
+  const url = new URL("../package.json", import.meta.url);
+  const raw = readFileSync(fileURLToPath(url), "utf8");
+  const parsed: unknown = JSON.parse(raw);
+  if (
+    typeof parsed === "object" &&
+    parsed !== null &&
+    "version" in parsed &&
+    typeof (parsed as { version: unknown }).version === "string"
+  ) {
+    return (parsed as { version: string }).version;
+  }
+  throw new Error("package.json is missing a string 'version' field");
+}
 
 export function parseArgs(argv: readonly string[]): CliArgs {
   const args: CliArgs = {
@@ -94,18 +114,27 @@ export async function main(argv: readonly string[]): Promise<number> {
   loadEnv(projectRoot);
 
   const claudeBinary = findClaudeCodeBinary();
-  const hasApiKey = (process.env.ANTHROPIC_API_KEY ?? "").trim().length > 0;
-  if (claudeBinary === null && !hasApiKey) {
-    process.stderr.write(
-      "error: no auth available. Install Claude Code (https://claude.ai/code) and log in, or export ANTHROPIC_API_KEY.\n",
-    );
-    return 1;
-  }
   const usingSubscription = claudeBinary !== null;
   if (usingSubscription) {
     process.stdout.write(`auth: Claude Code subscription via ${claudeBinary}\n`);
     delete process.env.ANTHROPIC_API_KEY;
   } else {
+    const hasApiKey = (process.env.ANTHROPIC_API_KEY ?? "").trim().length > 0;
+    if (!hasApiKey) {
+      process.stderr.write(
+        "error: no auth available. Install Claude Code (https://claude.ai/code) and log in, or export ANTHROPIC_API_KEY.\n",
+      );
+      return 1;
+    }
+    try {
+      requireApiKey();
+    } catch (err) {
+      if (err instanceof MissingApiKeyError || err instanceof InvalidApiKeyError) {
+        process.stderr.write(`error: ${err.message}\n`);
+        return 1;
+      }
+      throw err;
+    }
     process.stdout.write("auth: ANTHROPIC_API_KEY (per-token billing)\n");
   }
 
