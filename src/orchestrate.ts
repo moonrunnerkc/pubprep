@@ -210,16 +210,17 @@ function writeCombinedReview(
   combinedPath: string,
   reviewerResults: RunAgentResult[],
 ): void {
+  // Caller is responsible for short-circuiting on any reviewer failure;
+  // this function assumes every result completed successfully.
+  if (reviewerResults.some((r) => r.isError)) {
+    throw new Error(
+      "writeCombinedReview called with a failed reviewer result. " +
+        "Orchestrate must abort before reaching this function on reviewer failure.",
+    );
+  }
   const parts: string[] = [];
   for (const r of reviewerResults) {
     const title = humanTitle(r.agentName);
-    if (r.isError) {
-      const reason = r.errorMessage ?? `stop reason: ${r.stopReason}`;
-      parts.push(
-        `# ${title}\n\n> reviewer did not complete: ${reason}\n>\n> Output omitted to prevent convergence from consuming a partial report.\n`,
-      );
-      continue;
-    }
     const body = existsSync(r.outputPath)
       ? readFileSync(r.outputPath, "utf8")
       : "";
