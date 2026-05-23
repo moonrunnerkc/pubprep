@@ -61,7 +61,7 @@ describe("orchestrate", () => {
     expect(combined).toMatch(/\n---\n/);
 
     const manifest = JSON.parse(readFileSync(result.manifestPath, "utf8"));
-    expect(manifest.runId).toBe("2026-05-22T143000Z");
+    expect(manifest.run_id).toBe("2026-05-22T143000Z");
     expect(manifest.exit_reason).toBe("success");
     expect(manifest.target_repo).toBe(repo);
     expect(typeof manifest.target_head_sha).toBe("string");

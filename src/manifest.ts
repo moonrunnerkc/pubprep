@@ -16,7 +16,7 @@ export type AgentManifestEntry = {
 };
 
 export type Manifest = {
-  runId: string;
+  run_id: string;
   started_at: string;
   finished_at: string | null;
   target_repo: string;
@@ -34,7 +34,7 @@ export function createInitialManifest(args: {
   startedAt: Date;
 }): Manifest {
   return {
-    runId: args.runId,
+    run_id: args.runId,
     started_at: args.startedAt.toISOString(),
     finished_at: null,
     target_repo: args.targetRepo,
