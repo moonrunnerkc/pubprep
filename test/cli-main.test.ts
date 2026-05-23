@@ -59,6 +59,7 @@ function successfulOrchestrate(): Awaited<ReturnType<typeof orchestrate>> {
       agents: [],
       convergence_branch: null,
       exit_reason: "success",
+      publish_gate: null,
       warnings: [],
     },
   };
@@ -220,5 +221,62 @@ describe("main()", () => {
     const code = await main([], { cwd: repo, home: fakeHome });
     expect(code).toBe(2);
     expect(stderrText()).toMatch(/error: boom/);
+  });
+
+  it("forwards --no-publish-gate to orchestrate", async () => {
+    repo = makeCleanRepo();
+    findBinaryMock.mockReturnValue("/opt/homebrew/bin/claude");
+    const code = await main(["--no-publish-gate"], { cwd: repo, home: fakeHome });
+    expect(code).toBe(0);
+    expect(orchestrateMock.mock.calls[0]?.[0]?.publishGate).toBe(false);
+  });
+
+  it("prints publish-ready and a push hint on success when a branch is set", async () => {
+    repo = makeCleanRepo();
+    findBinaryMock.mockReturnValue("/opt/homebrew/bin/claude");
+    const base = successfulOrchestrate();
+    orchestrateMock.mockResolvedValueOnce({
+      ...base,
+      manifest: {
+        ...base.manifest,
+        convergence_branch: "convergence/2026-05-22-fixes",
+      },
+    });
+    const code = await main([], { cwd: repo, home: fakeHome });
+    expect(code).toBe(0);
+    const out = stdoutText();
+    expect(out).toMatch(/publish-ready: yes/);
+    expect(out).toMatch(
+      /git push -u origin convergence\/2026-05-22-fixes/,
+    );
+  });
+
+  it("prints publish-ready: NO and the failure detail when the gate fails", async () => {
+    repo = makeCleanRepo();
+    findBinaryMock.mockReturnValue("/opt/homebrew/bin/claude");
+    const base = successfulOrchestrate();
+    orchestrateMock.mockResolvedValueOnce({
+      ...base,
+      exitReason: "not_publish_ready",
+      manifest: {
+        ...base.manifest,
+        exit_reason: "not_publish_ready",
+        publish_gate: {
+          ran: true,
+          passed: false,
+          checked: ["clean_tree", "typecheck"],
+          skipped: ["tests"],
+          failures: [
+            { check: "typecheck", detail: "src/foo.ts(10,3): TS2304: Cannot find name 'bar'." },
+          ],
+        },
+      },
+    });
+    const code = await main([], { cwd: repo, home: fakeHome });
+    expect(code).toBe(2);
+    const out = stdoutText();
+    expect(out).toMatch(/publish-ready: NO/);
+    expect(out).toMatch(/typecheck:/);
+    expect(out).toMatch(/Cannot find name 'bar'/);
   });
 });

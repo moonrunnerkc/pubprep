@@ -23,6 +23,7 @@ export type CliArgs = {
   help: boolean;
   version: boolean;
   maxBudgetUsd: number | null;
+  publishGate: boolean;
 };
 
 const DEFAULT_MAX_BUDGET_USD = 20;
@@ -51,6 +52,7 @@ export function parseArgs(argv: readonly string[]): CliArgs {
     help: false,
     version: false,
     maxBudgetUsd: DEFAULT_MAX_BUDGET_USD,
+    publishGate: true,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -71,6 +73,9 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         break;
       case "--no-max-budget-usd":
         args.maxBudgetUsd = null;
+        break;
+      case "--no-publish-gate":
+        args.publishGate = false;
         break;
       case "--max-budget-usd": {
         const raw = argv[i + 1];
@@ -109,6 +114,11 @@ Options:
                            effect under subscription auth (cost is reported as
                            zero per call).
   --no-max-budget-usd      Disable the budget cap.
+  --no-publish-gate        Skip the post-convergence publish-readiness gate
+                           (clean tree + npm run typecheck + npm test). Use
+                           when your project doesn't define those scripts or
+                           when you intentionally want the convergence agent
+                           to leave the working tree dirty for manual review.
   -h, --help               Show this message.
   -v, --version            Print the pubprep version.
 
@@ -204,6 +214,7 @@ export async function main(
       log: (m) => process.stdout.write(`${m}\n`),
       parallelReviewers: !usingSubscription,
       maxBudgetUsd: parsed.maxBudgetUsd,
+      publishGate: parsed.publishGate,
     });
     printSummary(result, usingSubscription);
     return result.exitReason === "success" ? 0 : 2;
@@ -232,6 +243,37 @@ function printSummary(
   if (result.manifest.convergence_branch) {
     process.stdout.write(
       `convergence branch: ${result.manifest.convergence_branch}\n`,
+    );
+  }
+  printPublishGateBlock(result);
+}
+
+function printPublishGateBlock(
+  result: Awaited<ReturnType<typeof orchestrate>>,
+): void {
+  const branch = result.manifest.convergence_branch;
+  if (result.exitReason === "success") {
+    process.stdout.write("\npublish-ready: yes\n");
+    if (branch) {
+      process.stdout.write(
+        `next: git push -u origin ${branch}    # then open a PR, or merge to main\n`,
+      );
+    }
+    return;
+  }
+  if (result.exitReason === "not_publish_ready") {
+    process.stdout.write("\npublish-ready: NO\n");
+    const gate = result.manifest.publish_gate;
+    if (gate) {
+      for (const f of gate.failures) {
+        process.stdout.write(`  ${f.check}:\n`);
+        for (const line of f.detail.split("\n")) {
+          process.stdout.write(`    ${line}\n`);
+        }
+      }
+    }
+    process.stdout.write(
+      "next: review the failures above on the convergence branch, fix them, commit, then push.\n",
     );
   }
 }
