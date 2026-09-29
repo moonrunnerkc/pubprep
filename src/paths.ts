@@ -28,7 +28,7 @@ const RUNS_DIRNAME = "runs";
 const LATEST_DIRNAME = "latest";
 
 export function formatRunTimestamp(date: Date): string {
-  return date.toISOString().replace(/\.\d{3}Z$/, "Z").replace(/[:]/g, "");
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z").replace(/[:]/g, "-");
 }
 
 export function getPubprepDir(projectRoot: string): string {
